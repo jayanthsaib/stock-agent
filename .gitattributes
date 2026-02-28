@@ -1,0 +1,6 @@
+# Force LF for shell scripts (must not have CRLF on Linux servers)
+deploy/*.sh text eol=lf
+deploy/*.service text eol=lf
+
+# Default: normalize everything else
+* text=auto

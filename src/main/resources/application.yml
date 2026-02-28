@@ -4,7 +4,7 @@ spring:
 
   # ── Database ──────────────────────────────────────────────────────────────
   datasource:
-    url: ${DB_URL:jdbc:h2:mem:stockagent;DB_CLOSE_DELAY=-1}
+    url: ${DB_URL:jdbc:h2:file:./data/stockagent;DB_CLOSE_DELAY=-1;AUTO_SERVER=true}
     username: ${DB_USER:sa}
     password: ${DB_PASSWORD:}
     driver-class-name: ${DB_DRIVER:org.h2.Driver}

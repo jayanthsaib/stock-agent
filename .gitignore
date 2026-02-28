@@ -4,6 +4,7 @@
 secrets.properties
 
 # ── H2 database files (paper trading) ────────────────────────────────────────
+data/
 *.db
 *.mv.db
 *.trace.db
