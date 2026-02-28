@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head th:replace="~{fragments/layout :: head(title='Analyse Stock')}"></head>
+<body>
+
+<div th:replace="~{fragments/layout :: sidebar(active='analyse')}"></div>
+
+<div id="main">
+    <!-- Top bar -->
+    <div id="topbar">
+        <span class="page-title">
+            <i class="fa-solid fa-magnifying-glass-chart me-2" style="color:#58a6ff;"></i>
+            Stock Analysis
+        </span>
+        <span style="font-size:11px;color:#8b949e;" th:if="${result != null and result.errorMessage == null}">
+            Analysed at
+            <span th:text="${#temporals.format(result.analysedAt,'HH:mm:ss')}"></span>
+        </span>
+    </div>
+
+    <div class="content-area">
+
+        <!-- ── Search bar ─────────────────────────────────────────────────── -->
+        <form method="get" th:action="@{/ui/analyse}" class="mb-4">
+            <div class="d-flex gap-2" style="max-width:500px;">
+                <input
+                    type="text"
+                    name="symbol"
+                    th:value="${symbol}"
+                    placeholder="Enter NSE symbol  e.g. RELIANCE, TCS, INFY"
+                    class="form-control"
+                    style="background:#161b22;border:1px solid #30363d;color:#e6edf3;border-radius:8px;font-size:14px;"
+                    autocomplete="off"
+                    autofocus
+                />
+                <button type="submit"
+                        class="btn"
+                        style="background:#238636;color:#fff;border:none;border-radius:8px;padding:0 20px;font-weight:600;white-space:nowrap;">
+                    <i class="fa-solid fa-bolt me-1"></i> Analyse
+                </button>
+            </div>
+        </form>
+
+        <!-- ── Empty state ────────────────────────────────────────────────── -->
+        <div th:if="${result == null}" class="stat-card text-center py-5" style="max-width:500px;">
+            <i class="fa-solid fa-magnifying-glass-chart" style="font-size:40px;color:#30363d;"></i>
+            <p class="mt-3 mb-1" style="color:#8b949e;font-size:15px;">Enter a stock symbol above to run a full analysis.</p>
+            <p style="font-size:12px;color:#484f58;">Fundamental · Technical · Macro · Trade Levels</p>
+        </div>
+
+        <!-- ── Error state ────────────────────────────────────────────────── -->
+        <div th:if="${result != null and result.errorMessage != null}"
+             class="stat-card d-flex align-items-center gap-3 py-4" style="max-width:600px;border-color:#f8514944;">
+            <i class="fa-solid fa-circle-exclamation" style="font-size:28px;color:#f85149;"></i>
+            <div>
+                <div style="color:#f85149;font-weight:600;margin-bottom:4px;">Analysis Failed</div>
+                <div style="color:#8b949e;font-size:13px;" th:text="${result.errorMessage}"></div>
+            </div>
+        </div>
+
+        <!-- ════════════════════════════════════════════════════════════════
+             RESULTS (only shown when analysis succeeded)
+             ════════════════════════════════════════════════════════════════ -->
+        <div th:if="${result != null and result.errorMessage == null}">
+
+            <!-- ── Verdict banner ───────────────────────────────────────── -->
+            <div class="stat-card mb-4 d-flex align-items-center justify-content-between flex-wrap gap-3"
+                 th:style="'border-left:4px solid ' + ${result.verdictColor} + ';'">
+                <div class="d-flex align-items-center gap-3">
+                    <div>
+                        <div style="font-size:11px;font-weight:600;letter-spacing:.6px;text-transform:uppercase;color:#8b949e;">
+                            Verdict
+                        </div>
+                        <div style="font-size:22px;font-weight:700;"
+                             th:style="'font-size:22px;font-weight:700;color:' + ${result.verdictColor}"
+                             th:text="${result.verdict}">
+                        </div>
+                    </div>
+                    <div style="width:1px;height:40px;background:#30363d;"></div>
+                    <div>
+                        <div style="font-size:11px;color:#8b949e;margin-bottom:2px;">Symbol</div>
+                        <div style="font-size:18px;font-weight:700;color:#e6edf3;" th:text="${result.symbol}"></div>
+                    </div>
+                    <div>
+                        <div style="font-size:11px;color:#8b949e;margin-bottom:2px;">Sector</div>
+                        <div style="font-size:13px;color:#c9d1d9;" th:text="${result.sector}"></div>
+                    </div>
+                </div>
+                <div style="font-size:30px;font-weight:700;color:#e6edf3;">
+                    ₹<span th:text="${#numbers.formatDecimal(result.ltp,1,2)}"></span>
+                    <span style="font-size:13px;color:#8b949e;font-weight:400;"> LTP</span>
+                </div>
+            </div>
+
+            <!-- ── Row 1: Price snapshot + Composite score ───────────────── -->
+            <div class="row g-3 mb-3">
+
+                <!-- Price snapshot -->
+                <div class="col-lg-5">
+                    <div class="stat-card h-100">
+                        <div style="font-size:12px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:#8b949e;margin-bottom:14px;">
+                            Price Snapshot
+                        </div>
+                        <div class="row g-2">
+                            <div class="col-6">
+                                <div style="font-size:11px;color:#8b949e;">Open</div>
+                                <div style="font-weight:600;color:#e6edf3;">₹<span th:text="${#numbers.formatDecimal(result.open,1,2)}"></span></div>
+                            </div>
+                            <div class="col-6">
+                                <div style="font-size:11px;color:#8b949e;">High</div>
+                                <div style="font-weight:600;color:#3fb950;">₹<span th:text="${#numbers.formatDecimal(result.high,1,2)}"></span></div>
+                            </div>
+                            <div class="col-6">
+                                <div style="font-size:11px;color:#8b949e;">Low</div>
+                                <div style="font-weight:600;color:#f85149;">₹<span th:text="${#numbers.formatDecimal(result.low,1,2)}"></span></div>
+                            </div>
+                            <div class="col-6">
+                                <div style="font-size:11px;color:#8b949e;">Close</div>
+                                <div style="font-weight:600;color:#e6edf3;">₹<span th:text="${#numbers.formatDecimal(result.close,1,2)}"></span></div>
+                            </div>
+                            <div class="col-12 mt-1">
+                                <div style="font-size:11px;color:#8b949e;">Volume</div>
+                                <div style="font-weight:600;color:#e6edf3;" th:text="${#numbers.formatInteger(result.volume,1,'COMMA')}"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Composite confidence score -->
+                <div class="col-lg-7">
+                    <div class="stat-card h-100">
+                        <div style="font-size:12px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:#8b949e;margin-bottom:14px;">
+                            Confidence Score
+                        </div>
+
+                        <!-- Overall score -->
+                        <div class="d-flex align-items-center gap-3 mb-3">
+                            <div style="font-size:36px;font-weight:700;"
+                                 th:style="'font-size:36px;font-weight:700;color:' + ${result.verdictColor}"
+                                 th:text="${#numbers.formatDecimal(result.compositeScore,1,1)} + '%'">
+                            </div>
+                            <div style="flex:1">
+                                <div class="conf-bar">
+                                    <div class="conf-bar-fill"
+                                         th:classappend="${result.compositeScore >= 65 ? 'conf-high' : (result.compositeScore >= 50 ? 'conf-med' : 'conf-low')}"
+                                         th:style="'width:' + ${result.compositeScore} + '%'"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Component bars -->
+                        <div th:with="
+                            fW=${result.fundamentalWeight},
+                            tW=${result.technicalWeight},
+                            mW=${result.macroWeight},
+                            rW=${result.rrWeight}">
+
+                            <div th:each="row : ${ {
+                                    {'Fundamental', result.fundamentalScore, fW},
+                                    {'Technical',   result.technicalScore,   tW},
+                                    {'Macro',        result.macroScore,       mW},
+                                    {'Risk-Reward',  result.rrScore,          rW}
+                                } }" class="mb-2">
+                            </div>
+
+                            <!-- Fundamental -->
+                            <div class="mb-2">
+                                <div class="d-flex justify-content-between mb-1">
+                                    <span style="font-size:12px;color:#8b949e;">Fundamental
+                                        <span style="color:#484f58;" th:text="'(' + ${#numbers.formatDecimal(fW,1,0)} + '% weight)'"></span>
+                                    </span>
+                                    <span style="font-size:12px;font-weight:600;color:#c9d1d9;"
+                                          th:text="${#numbers.formatDecimal(result.fundamentalScore,1,1)} + '%'"></span>
+                                </div>
+                                <div class="conf-bar">
+                                    <div class="conf-bar-fill"
+                                         th:classappend="${result.fundamentalScore >= 65 ? 'conf-high' : (result.fundamentalScore >= 45 ? 'conf-med' : 'conf-low')}"
+                                         th:style="'width:' + ${result.fundamentalScore} + '%'"></div>
+                                </div>
+                            </div>
+                            <!-- Technical -->
+                            <div class="mb-2">
+                                <div class="d-flex justify-content-between mb-1">
+                                    <span style="font-size:12px;color:#8b949e;">Technical
+                                        <span style="color:#484f58;" th:text="'(' + ${#numbers.formatDecimal(tW,1,0)} + '% weight)'"></span>
+                                    </span>
+                                    <span style="font-size:12px;font-weight:600;color:#c9d1d9;"
+                                          th:text="${#numbers.formatDecimal(result.technicalScore,1,1)} + '%'"></span>
+                                </div>
+                                <div class="conf-bar">
+                                    <div class="conf-bar-fill"
+                                         th:classappend="${result.technicalScore >= 65 ? 'conf-high' : (result.technicalScore >= 45 ? 'conf-med' : 'conf-low')}"
+                                         th:style="'width:' + ${result.technicalScore} + '%'"></div>
+                                </div>
+                            </div>
+                            <!-- Macro -->
+                            <div class="mb-2">
+                                <div class="d-flex justify-content-between mb-1">
+                                    <span style="font-size:12px;color:#8b949e;">Macro
+                                        <span style="color:#484f58;" th:text="'(' + ${#numbers.formatDecimal(mW,1,0)} + '% weight)'"></span>
+                                    </span>
+                                    <span style="font-size:12px;font-weight:600;color:#c9d1d9;"
+                                          th:text="${#numbers.formatDecimal(result.macroScore,1,1)} + '%'"></span>
+                                </div>
+                                <div class="conf-bar">
+                                    <div class="conf-bar-fill"
+                                         th:classappend="${result.macroScore >= 65 ? 'conf-high' : (result.macroScore >= 45 ? 'conf-med' : 'conf-low')}"
+                                         th:style="'width:' + ${result.macroScore} + '%'"></div>
+                                </div>
+                            </div>
+                            <!-- R:R -->
+                            <div>
+                                <div class="d-flex justify-content-between mb-1">
+                                    <span style="font-size:12px;color:#8b949e;">Risk-Reward
+                                        <span style="color:#484f58;" th:text="'(' + ${#numbers.formatDecimal(rW,1,0)} + '% weight)'"></span>
+                                    </span>
+                                    <span style="font-size:12px;font-weight:600;color:#c9d1d9;"
+                                          th:text="${#numbers.formatDecimal(result.rrScore,1,1)} + '%'"></span>
+                                </div>
+                                <div class="conf-bar">
+                                    <div class="conf-bar-fill"
+                                         th:classappend="${result.rrScore >= 65 ? 'conf-high' : (result.rrScore >= 45 ? 'conf-med' : 'conf-low')}"
+                                         th:style="'width:' + ${result.rrScore} + '%'"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ── Row 2: Technical + Fundamental ────────────────────────── -->
+            <div class="row g-3 mb-3">
+
+                <!-- Technical analysis -->
+                <div class="col-lg-6">
+                    <div class="stat-card h-100">
+                        <div class="d-flex align-items-center justify-content-between mb-3">
+                            <div style="font-size:12px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:#8b949e;">
+                                Technical Analysis
+                            </div>
+                            <span style="font-size:13px;font-weight:700;"
+                                  th:style="'font-size:13px;font-weight:700;color:' + (${result.technicalScore >= 65} ? '#3fb950' : (${result.technicalScore >= 45} ? '#d29922' : '#f85149'))"
+                                  th:text="${#numbers.formatDecimal(result.technicalScore,1,1)} + '%'">
+                            </span>
+                        </div>
+
+                        <!-- Moving averages -->
+                        <div style="font-size:11px;font-weight:600;color:#8b949e;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">
+                            Moving Averages
+                        </div>
+                        <div class="row g-2 mb-3">
+                            <div class="col-4 text-center" style="background:#21262d;border-radius:6px;padding:8px 4px;">
+                                <div style="font-size:10px;color:#8b949e;">SMA 20</div>
+                                <div style="font-size:13px;font-weight:600;color:#c9d1d9;">₹<span th:text="${#numbers.formatDecimal(result.sma20,1,0)}"></span></div>
+                                <div th:if="${result.ltp > result.sma20}" style="font-size:10px;color:#3fb950;">▲ Above</div>
+                                <div th:unless="${result.ltp > result.sma20}" style="font-size:10px;color:#f85149;">▼ Below</div>
+                            </div>
+                            <div class="col-4 text-center" style="background:#21262d;border-radius:6px;padding:8px 4px;">
+                                <div style="font-size:10px;color:#8b949e;">SMA 50</div>
+                                <div style="font-size:13px;font-weight:600;color:#c9d1d9;">₹<span th:text="${#numbers.formatDecimal(result.sma50,1,0)}"></span></div>
+                                <div th:if="${result.ltp > result.sma50}" style="font-size:10px;color:#3fb950;">▲ Above</div>
+                                <div th:unless="${result.ltp > result.sma50}" style="font-size:10px;color:#f85149;">▼ Below</div>
+                            </div>
+                            <div class="col-4 text-center" style="background:#21262d;border-radius:6px;padding:8px 4px;">
+                                <div style="font-size:10px;color:#8b949e;">SMA 200</div>
+                                <div style="font-size:13px;font-weight:600;color:#c9d1d9;">₹<span th:text="${#numbers.formatDecimal(result.sma200,1,0)}"></span></div>
+                                <div th:if="${result.ltp > result.sma200}" style="font-size:10px;color:#3fb950;">▲ Above</div>
+                                <div th:unless="${result.ltp > result.sma200}" style="font-size:10px;color:#f85149;">▼ Below</div>
+                            </div>
+                        </div>
+
+                        <!-- RSI + signals -->
+                        <div style="font-size:11px;font-weight:600;color:#8b949e;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">
+                            Indicators
+                        </div>
+                        <div class="d-flex flex-column gap-2 mb-3">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span style="font-size:12px;color:#8b949e;">RSI (14)</span>
+                                <span style="font-size:13px;font-weight:600;"
+                                      th:style="'font-size:13px;font-weight:600;color:' + (${result.rsi > 75} ? '#f85149' : (${result.rsi < 40} ? '#3fb950' : '#c9d1d9'))"
+                                      th:text="${#numbers.formatDecimal(result.rsi,1,1)}">
+                                </span>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span style="font-size:12px;color:#8b949e;">Golden Cross</span>
+                                <span th:if="${result.goldenCross}" style="font-size:12px;color:#3fb950;font-weight:600;">✓ Yes</span>
+                                <span th:unless="${result.goldenCross}" style="font-size:12px;color:#484f58;">No</span>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span style="font-size:12px;color:#8b949e;">Death Cross</span>
+                                <span th:if="${result.deathCross}" style="font-size:12px;color:#f85149;font-weight:600;">⚠ Yes</span>
+                                <span th:unless="${result.deathCross}" style="font-size:12px;color:#484f58;">No</span>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span style="font-size:12px;color:#8b949e;">Volume Confirmed</span>
+                                <span th:if="${result.volumeConfirmed}" style="font-size:12px;color:#3fb950;font-weight:600;">✓ Yes</span>
+                                <span th:unless="${result.volumeConfirmed}" style="font-size:12px;color:#f85149;">No</span>
+                            </div>
+                        </div>
+
+                        <!-- Support / Resistance -->
+                        <div style="font-size:11px;font-weight:600;color:#8b949e;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">
+                            Support / Resistance
+                        </div>
+                        <div class="d-flex gap-3">
+                            <div style="flex:1;background:#21262d;border-radius:6px;padding:8px 12px;">
+                                <div style="font-size:10px;color:#3fb950;">Support</div>
+                                <div style="font-weight:600;color:#e6edf3;">₹<span th:text="${#numbers.formatDecimal(result.supportLevel,1,2)}"></span></div>
+                            </div>
+                            <div style="flex:1;background:#21262d;border-radius:6px;padding:8px 12px;">
+                                <div style="font-size:10px;color:#f85149;">Resistance</div>
+                                <div style="font-weight:600;color:#e6edf3;">₹<span th:text="${#numbers.formatDecimal(result.resistanceLevel,1,2)}"></span></div>
+                            </div>
+                        </div>
+
+                        <div style="margin-top:12px;padding-top:12px;border-top:1px solid #30363d;font-size:12px;color:#8b949e;"
+                             th:text="${result.technicalSummary}">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Fundamental analysis -->
+                <div class="col-lg-6">
+                    <div class="stat-card h-100">
+                        <div class="d-flex align-items-center justify-content-between mb-3">
+                            <div style="font-size:12px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:#8b949e;">
+                                Fundamental Analysis
+                            </div>
+                            <span style="font-size:13px;font-weight:700;"
+                                  th:style="'font-size:13px;font-weight:700;color:' + (${result.fundamentalScore >= 65} ? '#3fb950' : (${result.fundamentalScore >= 45} ? '#d29922' : '#f85149'))"
+                                  th:text="${#numbers.formatDecimal(result.fundamentalScore,1,1)} + '%'">
+                            </span>
+                        </div>
+
+                        <div class="d-flex flex-column gap-3">
+                            <div class="row g-2">
+                                <div class="col-6">
+                                    <div style="background:#21262d;border-radius:6px;padding:10px 12px;">
+                                        <div style="font-size:10px;color:#8b949e;">ROE</div>
+                                        <div style="font-size:16px;font-weight:700;"
+                                             th:style="'font-size:16px;font-weight:700;color:' + (${result.roe >= 15} ? '#3fb950' : '#d29922')"
+                                             th:text="${#numbers.formatDecimal(result.roe,1,1)} + '%'">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div style="background:#21262d;border-radius:6px;padding:10px 12px;">
+                                        <div style="font-size:10px;color:#8b949e;">ROCE</div>
+                                        <div style="font-size:16px;font-weight:700;"
+                                             th:style="'font-size:16px;font-weight:700;color:' + (${result.roce >= 12} ? '#3fb950' : '#d29922')"
+                                             th:text="${#numbers.formatDecimal(result.roce,1,1)} + '%'">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div style="background:#21262d;border-radius:6px;padding:10px 12px;">
+                                        <div style="font-size:10px;color:#8b949e;">Debt / Equity</div>
+                                        <div style="font-size:16px;font-weight:700;"
+                                             th:style="'font-size:16px;font-weight:700;color:' + (${result.debtToEquity <= 0.5} ? '#3fb950' : (${result.debtToEquity <= 1.0} ? '#d29922' : '#f85149'))"
+                                             th:text="${#numbers.formatDecimal(result.debtToEquity,1,2)} + 'x'">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div style="background:#21262d;border-radius:6px;padding:10px 12px;">
+                                        <div style="font-size:10px;color:#8b949e;">P/E Ratio</div>
+                                        <div style="font-size:16px;font-weight:700;color:#c9d1d9;"
+                                             th:text="${#numbers.formatDecimal(result.peRatio,1,1)} + 'x'">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div style="background:#21262d;border-radius:6px;padding:10px 12px;">
+                                        <div style="font-size:10px;color:#8b949e;">PEG Ratio</div>
+                                        <div style="font-size:16px;font-weight:700;"
+                                             th:style="'font-size:16px;font-weight:700;color:' + (${result.pegRatio > 0 and result.pegRatio <= 1.5} ? '#3fb950' : '#d29922')"
+                                             th:text="${#numbers.formatDecimal(result.pegRatio,1,2)}">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div style="background:#21262d;border-radius:6px;padding:10px 12px;">
+                                        <div style="font-size:10px;color:#8b949e;">Promoter Holding</div>
+                                        <div style="font-size:16px;font-weight:700;"
+                                             th:style="'font-size:16px;font-weight:700;color:' + (${result.promoterHolding >= 40} ? '#3fb950' : '#d29922')"
+                                             th:text="${#numbers.formatDecimal(result.promoterHolding,1,1)} + '%'">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style="margin-top:12px;padding-top:12px;border-top:1px solid #30363d;font-size:12px;color:#8b949e;"
+                             th:text="${result.fundamentalSummary}">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ── Row 3: Macro + Trade levels ───────────────────────────── -->
+            <div class="row g-3">
+
+                <!-- Macro context -->
+                <div class="col-lg-5">
+                    <div class="stat-card h-100">
+                        <div class="d-flex align-items-center justify-content-between mb-3">
+                            <div style="font-size:12px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:#8b949e;">
+                                Macro Context
+                            </div>
+                            <span style="font-size:13px;font-weight:700;"
+                                  th:style="'font-size:13px;font-weight:700;color:' + (${result.macroScore >= 65} ? '#3fb950' : (${result.macroScore >= 45} ? '#d29922' : '#f85149'))"
+                                  th:text="${#numbers.formatDecimal(result.macroScore,1,1)} + '%'">
+                            </span>
+                        </div>
+                        <div class="d-flex flex-column gap-2">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span style="font-size:12px;color:#8b949e;">India VIX</span>
+                                <span style="font-size:13px;font-weight:600;"
+                                      th:style="'font-size:13px;font-weight:600;color:' + (${result.indiaVix > 25} ? '#f85149' : (${result.indiaVix > 20} ? '#d29922' : '#3fb950'))"
+                                      th:text="${#numbers.formatDecimal(result.indiaVix,1,1)}">
+                                </span>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span style="font-size:12px;color:#8b949e;">Nifty 50</span>
+                                <span style="font-size:13px;font-weight:600;color:#c9d1d9;"
+                                      th:text="${#numbers.formatDecimal(result.niftyPrice,1,0)}">
+                                </span>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span style="font-size:12px;color:#8b949e;">Nifty 200 DMA</span>
+                                <span style="font-size:13px;font-weight:600;color:#c9d1d9;"
+                                      th:text="${#numbers.formatDecimal(result.nifty200dma,1,0)}">
+                                </span>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span style="font-size:12px;color:#8b949e;">Nifty vs 200 DMA</span>
+                                <span th:if="${result.niftyPrice > result.nifty200dma}" style="font-size:12px;color:#3fb950;font-weight:600;">▲ Above</span>
+                                <span th:unless="${result.niftyPrice > result.nifty200dma}" style="font-size:12px;color:#f85149;font-weight:600;">▼ Below</span>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span style="font-size:12px;color:#8b949e;">Market Regime</span>
+                                <span style="font-size:12px;font-weight:600;color:#58a6ff;"
+                                      th:text="${result.marketRegime}">
+                                </span>
+                            </div>
+                        </div>
+                        <div style="margin-top:12px;padding-top:12px;border-top:1px solid #30363d;font-size:12px;color:#8b949e;"
+                             th:text="${result.macroSummary}">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Suggested trade levels -->
+                <div class="col-lg-7">
+                    <div class="stat-card h-100">
+                        <div style="font-size:12px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:#8b949e;margin-bottom:16px;">
+                            Suggested Trade Levels
+                        </div>
+
+                        <div class="row g-3 mb-3">
+                            <div class="col-4 text-center">
+                                <div style="font-size:10px;color:#8b949e;margin-bottom:4px;">Entry (LTP)</div>
+                                <div style="font-size:18px;font-weight:700;color:#58a6ff;">
+                                    ₹<span th:text="${#numbers.formatDecimal(result.suggestedEntry,1,2)}"></span>
+                                </div>
+                            </div>
+                            <div class="col-4 text-center">
+                                <div style="font-size:10px;color:#3fb950;margin-bottom:4px;">Target</div>
+                                <div style="font-size:18px;font-weight:700;color:#3fb950;">
+                                    ₹<span th:text="${#numbers.formatDecimal(result.suggestedTarget,1,2)}"></span>
+                                </div>
+                                <div style="font-size:10px;color:#3fb950;"
+                                     th:text="'+' + ${#numbers.formatDecimal((result.suggestedTarget - result.suggestedEntry) / result.suggestedEntry * 100, 1, 1)} + '%'">
+                                </div>
+                            </div>
+                            <div class="col-4 text-center">
+                                <div style="font-size:10px;color:#f85149;margin-bottom:4px;">Stop Loss</div>
+                                <div style="font-size:18px;font-weight:700;color:#f85149;">
+                                    ₹<span th:text="${#numbers.formatDecimal(result.suggestedStopLoss,1,2)}"></span>
+                                </div>
+                                <div style="font-size:10px;color:#f85149;"
+                                     th:text="${#numbers.formatDecimal((result.suggestedEntry - result.suggestedStopLoss) / result.suggestedEntry * 100, 1, 1)} + '% risk'">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- R:R visual bar -->
+                        <div style="background:#21262d;border-radius:6px;padding:12px 16px;">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span style="font-size:12px;color:#8b949e;">Risk-Reward Ratio</span>
+                                <span style="font-size:15px;font-weight:700;"
+                                      th:style="'font-size:15px;font-weight:700;color:' + (${result.riskReward >= 2.0} ? '#3fb950' : (${result.riskReward >= 1.5} ? '#d29922' : '#f85149'))"
+                                      th:text="'1 : ' + ${#numbers.formatDecimal(result.riskReward,1,1)}">
+                                </span>
+                            </div>
+                            <div style="height:6px;background:#161b22;border-radius:3px;">
+                                <div th:style="'height:6px;border-radius:3px;background:linear-gradient(90deg,#238636,#3fb950);width:' + ${T(java.lang.Math).min(result.riskReward / 3.0 * 100, 100)} + '%'"></div>
+                            </div>
+                            <div class="d-flex justify-content-between mt-1">
+                                <span style="font-size:10px;color:#484f58;">0</span>
+                                <span style="font-size:10px;color:#484f58;">Min 2.0</span>
+                                <span style="font-size:10px;color:#484f58;">3.0</span>
+                            </div>
+                        </div>
+
+                        <div style="margin-top:12px;padding:10px 12px;background:#21262d;border-radius:6px;">
+                            <div style="font-size:11px;color:#8b949e;margin-bottom:4px;">Invalidation Level</div>
+                            <div style="font-size:12px;color:#c9d1d9;">
+                                Price closes below ₹<span th:text="${#numbers.formatDecimal(result.suggestedStopLoss,1,2)}"></span>
+                                — exit the trade immediately
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+        <!-- end results -->
+
+    </div>
+    <!-- end content-area -->
+</div>
+
+<div th:replace="~{fragments/layout :: scripts}"></div>
+</body>
+</html>

@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     HEAD fragment — th:replace="~{fragments/layout :: head(title='...')}"
+     ═══════════════════════════════════════════════════════════════════ -->
+<head th:fragment="head(title)">
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title th:text="${title} + ' | Stock Agent'">Stock Agent</title>
+
+    <!-- Bootstrap 5.3 dark -->
+    <link rel="stylesheet"
+          href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"/>
+    <!-- Font Awesome 6 -->
+    <link rel="stylesheet"
+          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+
+    <style>
+        :root {
+            --sidebar-width: 240px;
+            --topbar-height: 56px;
+            --bg-app:    #0d1117;
+            --bg-card:   #161b22;
+            --bg-sidebar:#0d1117;
+            --border:    #30363d;
+            --accent:    #238636;
+            --accent-light:#2ea043;
+            --text-muted:#8b949e;
+        }
+        body {
+            background: var(--bg-app);
+            color: #c9d1d9;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            font-size: 14px;
+        }
+
+        /* ── Sidebar ──────────────────────────────────── */
+        #sidebar {
+            position: fixed; top: 0; left: 0;
+            width: var(--sidebar-width);
+            height: 100vh;
+            background: var(--bg-sidebar);
+            border-right: 1px solid var(--border);
+            display: flex; flex-direction: column;
+            z-index: 100;
+            overflow-y: auto;
+        }
+        .sidebar-brand {
+            padding: 18px 20px 12px;
+            border-bottom: 1px solid var(--border);
+        }
+        .sidebar-brand .agent-name {
+            font-size: 16px; font-weight: 700;
+            color: #e6edf3; letter-spacing: .3px;
+        }
+        .sidebar-brand .agent-sub {
+            font-size: 11px; color: var(--text-muted); margin-top: 2px;
+        }
+        .nav-section-label {
+            font-size: 10px; font-weight: 600; letter-spacing: 1px;
+            color: var(--text-muted); text-transform: uppercase;
+            padding: 16px 20px 6px;
+        }
+        .sidebar-nav a {
+            display: flex; align-items: center; gap: 10px;
+            padding: 9px 20px; color: #c9d1d9;
+            text-decoration: none; border-radius: 6px;
+            margin: 1px 8px; font-size: 13.5px;
+            transition: background .15s;
+        }
+        .sidebar-nav a:hover   { background: #21262d; }
+        .sidebar-nav a.active  {
+            background: #1f6feb22;
+            color: #58a6ff;
+            font-weight: 600;
+        }
+        .sidebar-nav a i { width: 18px; text-align: center; font-size: 14px; }
+        .sidebar-footer {
+            margin-top: auto;
+            padding: 14px 20px;
+            border-top: 1px solid var(--border);
+            font-size: 11px; color: var(--text-muted);
+        }
+
+        /* ── Main content ─────────────────────────────── */
+        #main {
+            margin-left: var(--sidebar-width);
+            min-height: 100vh;
+            display: flex; flex-direction: column;
+        }
+        #topbar {
+            position: sticky; top: 0; z-index: 50;
+            height: var(--topbar-height);
+            background: var(--bg-sidebar);
+            border-bottom: 1px solid var(--border);
+            display: flex; align-items: center;
+            padding: 0 24px; gap: 12px;
+        }
+        #topbar .page-title {
+            font-weight: 600; font-size: 15px; color: #e6edf3;
+            flex: 1;
+        }
+        .content-area { padding: 24px; flex: 1; }
+
+        /* ── Cards ────────────────────────────────────── */
+        .stat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 18px 20px;
+        }
+        .stat-card .label {
+            font-size: 11px; font-weight: 600; letter-spacing: .6px;
+            text-transform: uppercase; color: var(--text-muted); margin-bottom: 6px;
+        }
+        .stat-card .value {
+            font-size: 26px; font-weight: 700; color: #e6edf3;
+            line-height: 1;
+        }
+        .stat-card .sub {
+            font-size: 11px; color: var(--text-muted); margin-top: 4px;
+        }
+
+        /* ── Tables ───────────────────────────────────── */
+        .table-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        .table-card .card-header-bar {
+            padding: 14px 20px;
+            border-bottom: 1px solid var(--border);
+            font-weight: 600; font-size: 13.5px; color: #e6edf3;
+            display: flex; align-items: center; justify-content: space-between;
+        }
+        .table { --bs-table-bg: transparent; color: #c9d1d9; margin: 0; }
+        .table thead th {
+            background: #161b22; color: var(--text-muted);
+            font-size: 11px; font-weight: 600; letter-spacing: .5px;
+            text-transform: uppercase; border-color: var(--border);
+            padding: 10px 14px;
+        }
+        .table td {
+            border-color: var(--border); padding: 10px 14px;
+            vertical-align: middle;
+        }
+        .table tbody tr:hover { background: #21262d55; }
+
+        /* ── Badges ───────────────────────────────────── */
+        .badge-buy    { background:#1f6feb22; color:#58a6ff; border:1px solid #1f6feb55; }
+        .badge-sell   { background:#da363322; color:#f85149; border:1px solid #da363355; }
+        .badge-hold   { background:#388bfd22; color:#79c0ff; border:1px solid #388bfd44; }
+        .badge-reduce { background:#d2992222; color:#f0883e; border:1px solid #d2992244; }
+
+        .badge-executed { background:#23863622; color:#3fb950; border:1px solid #23863655; }
+        .badge-pending  { background:#d2992222; color:#f0883e; border:1px solid #d2992244; }
+        .badge-approved { background:#1f6feb22; color:#58a6ff; border:1px solid #1f6feb55; }
+        .badge-rejected { background:#da363322; color:#f85149; border:1px solid #da363355; }
+        .badge-expired  { background:#30363d; color:var(--text-muted); border:1px solid var(--border); }
+
+        .pnl-positive { color: #3fb950; font-weight: 600; }
+        .pnl-negative { color: #f85149; font-weight: 600; }
+
+        /* ── Status dots ──────────────────────────────── */
+        .dot { width:8px; height:8px; border-radius:50%; display:inline-block; }
+        .dot-green  { background:#3fb950; box-shadow:0 0 6px #3fb95088; }
+        .dot-red    { background:#f85149; box-shadow:0 0 6px #f8514988; }
+        .dot-yellow { background:#d29922; box-shadow:0 0 6px #d2992288; }
+
+        /* ── Confidence bar ───────────────────────────── */
+        .conf-bar { height:4px; border-radius:2px; background:#21262d; }
+        .conf-bar-fill { height:100%; border-radius:2px; }
+        .conf-high { background:linear-gradient(90deg,#238636,#3fb950); }
+        .conf-med  { background:linear-gradient(90deg,#9e6a03,#d29922); }
+        .conf-low  { background:linear-gradient(90deg,#da3633,#f85149); }
+
+        /* ── Scrollbar ────────────────────────────────── */
+        ::-webkit-scrollbar { width:6px; height:6px; }
+        ::-webkit-scrollbar-track { background: var(--bg-app); }
+        ::-webkit-scrollbar-thumb { background: #30363d; border-radius:3px; }
+    </style>
+</head>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     SIDEBAR fragment — th:replace="~{fragments/layout :: sidebar(active='...')}"
+     ═══════════════════════════════════════════════════════════════════ -->
+<div th:fragment="sidebar(active)" id="sidebar">
+    <div class="sidebar-brand">
+        <div class="d-flex align-items-center gap-2">
+            <i class="fa-solid fa-robot" style="color:#58a6ff;font-size:20px;"></i>
+            <div>
+                <div class="agent-name">Stock Agent</div>
+                <div class="agent-sub">AI Trading Dashboard</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="nav-section-label">Navigation</div>
+    <nav class="sidebar-nav">
+        <a th:href="@{/ui/dashboard}" th:classappend="${active == 'dashboard' ? 'active' : ''}">
+            <i class="fa-solid fa-gauge"></i> Dashboard
+        </a>
+        <a th:href="@{/ui/positions}" th:classappend="${active == 'positions' ? 'active' : ''}">
+            <i class="fa-solid fa-layer-group"></i> Positions
+        </a>
+        <a th:href="@{/ui/signals}" th:classappend="${active == 'signals' ? 'active' : ''}">
+            <i class="fa-solid fa-bell"></i> Signals
+        </a>
+        <a th:href="@{/ui/performance}" th:classappend="${active == 'performance' ? 'active' : ''}">
+            <i class="fa-solid fa-chart-line"></i> Performance
+        </a>
+        <a th:href="@{/ui/analyse}" th:classappend="${active == 'analyse' ? 'active' : ''}">
+            <i class="fa-solid fa-magnifying-glass-chart"></i> Analyse Stock
+        </a>
+    </nav>
+
+    <div class="nav-section-label">Tools</div>
+    <nav class="sidebar-nav">
+        <a href="/api/status" target="_blank">
+            <i class="fa-solid fa-code"></i> API Status
+        </a>
+        <a href="/h2-console" target="_blank">
+            <i class="fa-solid fa-database"></i> H2 Console
+        </a>
+    </nav>
+
+    <div class="sidebar-footer">
+        <i class="fa-solid fa-circle-check" style="color:#3fb950;"></i>
+        Agent v1.0 &nbsp;·&nbsp; IST
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     SCRIPTS fragment
+     ═══════════════════════════════════════════════════════════════════ -->
+<div th:fragment="scripts">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+</div>
+
+</html>

@@ -1,0 +1,126 @@
+# ═══════════════════════════════════════════════════════════════════════════
+#  AI Stock Trading Agent — Configuration
+#  Edit this file before going live. All values can be overridden via env vars.
+# ═══════════════════════════════════════════════════════════════════════════
+
+# ── Portfolio ───────────────────────────────────────────────────────────────
+portfolio:
+  total_value_inr: 500000          # Total demat account value in INR
+  emergency_cash_buffer_pct: 20    # % always kept as cash/liquid fund — NEVER invested
+  max_open_positions: 15           # Maximum concurrent stock positions
+  mutual_fund_allocation_pct: 40   # Max % of portfolio in mutual funds
+
+# ── Position Sizing ─────────────────────────────────────────────────────────
+position_sizing:
+  max_single_stock_pct: 10         # Max % per individual stock
+  max_sector_pct: 25               # Max % in any single sector
+  min_position_size_inr: 5000      # Minimum trade value in INR
+  hard_cap_single_stock_pct: 25    # Absolute hard cap — overrides everything
+
+# ── Risk Rules ──────────────────────────────────────────────────────────────
+risk:
+  max_single_trade_drawdown_pct: 15   # Auto-sell triggered if loss exceeds this %
+  max_portfolio_drawdown_pct: 20      # Stop new buys if portfolio drops this % from peak
+  min_stop_loss_pct: 3                # Closest stop-loss allowed from entry (%)
+  max_stop_loss_pct: 15               # Farthest stop-loss allowed from entry (%)
+  min_risk_reward_ratio: 2.0          # Minimum R:R for any trade signal
+  trailing_stop_activate_pct: 10      # Activate trailing stop when profit exceeds this %
+  earnings_blackout_days: 5           # No buys N days before/after quarterly earnings
+  max_new_buys_per_week: 3            # Maximum new buy signals per week
+
+# ── Signal Thresholds ───────────────────────────────────────────────────────
+signal:
+  min_confidence_to_notify: 60     # Below this, signal is discarded silently
+  auto_execute_threshold: 90       # Above this, auto-execute (only if auto_mode: true)
+  approval_window_minutes: 30      # Minutes before unanswered signal auto-expires
+
+# ── Confidence Score Weights (must sum to 1.0) ───────────────────────────────
+confidence_weights:
+  fundamental: 0.35
+  technical: 0.30
+  macro: 0.20
+  risk_reward: 0.15
+
+# ── Stock Filters ────────────────────────────────────────────────────────────
+filters:
+  min_market_cap_cr: 500           # Minimum market cap in Crores
+  min_avg_daily_volume_cr: 1.0     # Minimum average daily trading volume in Crores
+  min_stock_price_inr: 10          # Penny stock filter
+  include_bse: false               # Set true to also scan BSE equity universe
+  max_analysis_universe: 500       # Safety cap: max stocks analysed per cycle
+
+# ── Fundamental Analysis Thresholds ─────────────────────────────────────────
+fundamental:
+  min_revenue_cagr_3y_pct: 10      # Minimum 3-year revenue CAGR (%)
+  min_roe_pct: 15                  # Minimum Return on Equity (%)
+  min_roce_pct: 12                 # Minimum Return on Capital Employed (%)
+  max_debt_to_equity: 1.0          # Preferred max D/E ratio
+  hard_max_debt_to_equity: 2.0     # Hard disqualifier D/E threshold
+  min_promoter_holding_pct: 40     # Preferred minimum promoter holding (%)
+  max_peg_ratio: 1.5               # Maximum PEG ratio for growth stocks
+
+# ── Technical Analysis Thresholds ───────────────────────────────────────────
+technical:
+  dma_long: 200                    # Long-term moving average period
+  dma_medium: 50                   # Medium-term moving average period
+  dma_short: 20                    # Short-term moving average period
+  rsi_period: 14                   # RSI calculation period
+  rsi_overbought: 75               # RSI level considered overbought (avoid buys)
+  rsi_oversold: 40                 # RSI level considered oversold (potential buy)
+  max_pct_above_200dma: 15         # Avoid entries more than this % above 200 DMA
+
+# ── Macro Thresholds ────────────────────────────────────────────────────────
+macro:
+  vix_no_buys_threshold: 25        # VIX above this: suppress ALL new buy signals
+  vix_caution_threshold: 20        # VIX above this: elevated caution, reduce sizes
+  vix_favorable_threshold: 15      # VIX below this: favorable environment
+  fii_selling_days_threshold: 10   # Consecutive FII selling days = reduce confidence
+
+# ── Execution ────────────────────────────────────────────────────────────────
+execution:
+  auto_mode: false                 # KEEP FALSE until Phase 3 validation
+  order_type: LIMIT                # Always use LIMIT orders — never MARKET
+  allow_margin: false              # Keep false unless intentional
+  order_fill_timeout_minutes: 30   # Cancel unfilled order after this many minutes
+
+# ── Broker API (Angel One) ────────────────────────────────────────────────────
+broker:
+  name: ANGEL_ONE
+  api_key: ${ANGEL_API_KEY}
+  client_id: ${ANGEL_CLIENT_ID}
+  mpin: ${ANGEL_MPIN}
+  totp_secret: ${ANGEL_TOTP_SECRET}
+
+# ── Notifications (Telegram) ──────────────────────────────────────────────────
+telegram:
+  bot_token: ${TELEGRAM_BOT_TOKEN}
+  chat_id: ${TELEGRAM_CHAT_ID}
+  polling_interval_seconds: 2
+
+# ── Paper Trading Mode ────────────────────────────────────────────────────────
+paper_trading:
+  enabled: true                    # Phase 1: always start in paper trading mode
+  virtual_balance_inr: 500000      # Virtual balance for simulation
+
+# ── Watchlist ────────────────────────────────────────────────────────────────
+watchlist:
+  - RELIANCE
+  - TCS
+  - INFY
+  - HDFCBANK
+  - ICICIBANK
+  - KOTAKBANK
+  - AXISBANK
+  - SBIN
+  - BAJFINANCE
+  - HINDUNILVR
+  - ITC
+  - LT
+  - TITAN
+  - ASIANPAINT
+  - NESTLEIND
+  - WIPRO
+  - HCLTECH
+  - TECHM
+  - SUNPHARMA
+  - DRREDDY

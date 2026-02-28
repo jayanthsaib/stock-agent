@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Signals')}"></head>
+<body>
+
+<div th:replace="~{fragments/layout :: sidebar('signals')}"></div>
+
+<div id="main">
+    <!-- Top bar -->
+    <div id="topbar">
+        <div class="page-title"><i class="fa-solid fa-bell me-2" style="color:#58a6ff;"></i>Signals</div>
+        <div class="ms-auto d-flex align-items-center gap-2">
+            <!-- Days filter -->
+            <select class="form-select form-select-sm bg-dark text-light border-secondary"
+                    style="width:130px;"
+                    onchange="window.location.href='/ui/signals?days='+this.value">
+                <option th:value="7"  th:selected="${days == 7}">Last 7 days</option>
+                <option th:value="14" th:selected="${days == 14}">Last 14 days</option>
+                <option th:value="30" th:selected="${days == 30}">Last 30 days</option>
+                <option th:value="90" th:selected="${days == 90}">Last 90 days</option>
+            </select>
+            <span class="text-muted small" id="clock"></span>
+            <button class="btn btn-sm btn-outline-secondary" onclick="location.reload()" title="Refresh">
+                <i class="fa-solid fa-rotate-right"></i>
+            </button>
+        </div>
+    </div>
+
+    <div class="content-area">
+
+        <!-- Pending approval section -->
+        <div class="table-card mb-4">
+            <div class="card-header-bar">
+                <span>
+                    <i class="fa-solid fa-hourglass-half me-2" style="color:#f0883e;"></i>
+                    Pending Approval
+                    <span class="badge rounded-pill ms-2"
+                          style="background:#d2992222;color:#f0883e;border:1px solid #d2992244;"
+                          th:text="${pending.size()}">0</span>
+                </span>
+                <span class="text-muted small">Awaiting your APPROVE/REJECT via Telegram</span>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Symbol</th>
+                            <th>Signal</th>
+                            <th>Confidence</th>
+                            <th>Entry</th>
+                            <th>Target</th>
+                            <th>Stop Loss</th>
+                            <th>R:R</th>
+                            <th>Capital</th>
+                            <th>Expires</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr th:if="${#lists.isEmpty(pending)}">
+                            <td colspan="9" class="text-center py-4" style="color:#8b949e;">
+                                <i class="fa-solid fa-check-circle me-2"></i>No pending signals
+                            </td>
+                        </tr>
+                        <tr th:each="s : ${pending}" style="border-left:3px solid #d29922;">
+                            <td>
+                                <strong th:text="${s.symbol}">RELIANCE</strong>
+                                <span class="d-block text-muted" style="font-size:11px;" th:text="${s.exchange}">NSE</span>
+                            </td>
+                            <td>
+                                <span class="badge rounded-pill"
+                                      th:classappend="'badge-' + ${#strings.toLowerCase(s.signalType)}"
+                                      th:text="${s.signalType}">BUY</span>
+                            </td>
+                            <td style="min-width:110px;">
+                                <div class="d-flex align-items-center gap-2">
+                                    <span th:text="${#numbers.formatDecimal(s.confidenceScore,1,1)} + '%'"
+                                          style="font-size:12px;width:40px;">75%</span>
+                                    <div class="conf-bar flex-fill">
+                                        <div class="conf-bar-fill"
+                                             th:classappend="${s.confidenceScore >= 75 ? 'conf-high' : (s.confidenceScore >= 55 ? 'conf-med' : 'conf-low')}"
+                                             th:style="'width:' + ${s.confidenceScore} + '%'"></div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td th:text="'₹' + ${#numbers.formatDecimal(s.entryPrice,1,2)}">₹0</td>
+                            <td style="color:#3fb950;" th:text="'₹' + ${#numbers.formatDecimal(s.targetPrice,1,2)}">₹0</td>
+                            <td style="color:#f85149;" th:text="'₹' + ${#numbers.formatDecimal(s.stopLossPrice,1,2)}">₹0</td>
+                            <td th:text="${#numbers.formatDecimal(s.riskRewardRatio,1,2)} + 'x'">0x</td>
+                            <td th:text="'₹' + ${#numbers.formatDecimal(s.capitalAllocationInr,1,0)}">₹0</td>
+                            <td class="text-muted"
+                                th:text="${s.expiresAt != null ? #temporals.format(s.expiresAt, 'dd MMM HH:mm') : '—'}">—</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Signal history -->
+        <div class="table-card">
+            <div class="card-header-bar">
+                <span><i class="fa-solid fa-clock-rotate-left me-2" style="color:#58a6ff;"></i>Signal History</span>
+                <span class="text-muted small" th:text="${history.size()} + ' signals'">0 signals</span>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Symbol</th>
+                            <th>Signal</th>
+                            <th>Confidence</th>
+                            <th>Entry</th>
+                            <th>Target</th>
+                            <th>Stop Loss</th>
+                            <th>Status</th>
+                            <th>Sector</th>
+                            <th>Generated</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr th:if="${#lists.isEmpty(history)}">
+                            <td colspan="9" class="text-center py-5" style="color:#8b949e;">
+                                <i class="fa-solid fa-chart-simple fa-2x mb-3 d-block"></i>
+                                No signals in the selected period.
+                            </td>
+                        </tr>
+                        <tr th:each="s : ${history}">
+                            <td>
+                                <strong th:text="${s.symbol}">RELIANCE</strong>
+                                <span class="d-block text-muted" style="font-size:11px;" th:text="${s.exchange}">NSE</span>
+                            </td>
+                            <td>
+                                <span class="badge rounded-pill"
+                                      th:classappend="'badge-' + ${#strings.toLowerCase(s.signalType)}"
+                                      th:text="${s.signalType}">BUY</span>
+                            </td>
+                            <td style="min-width:110px;">
+                                <div class="d-flex align-items-center gap-2">
+                                    <span th:text="${#numbers.formatDecimal(s.confidenceScore,1,1)} + '%'"
+                                          style="font-size:12px;width:40px;">75%</span>
+                                    <div class="conf-bar flex-fill">
+                                        <div class="conf-bar-fill"
+                                             th:classappend="${s.confidenceScore >= 75 ? 'conf-high' : (s.confidenceScore >= 55 ? 'conf-med' : 'conf-low')}"
+                                             th:style="'width:' + ${s.confidenceScore} + '%'"></div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td th:text="'₹' + ${#numbers.formatDecimal(s.entryPrice,1,2)}">₹0</td>
+                            <td th:text="'₹' + ${#numbers.formatDecimal(s.targetPrice,1,2)}">₹0</td>
+                            <td th:text="'₹' + ${#numbers.formatDecimal(s.stopLossPrice,1,2)}">₹0</td>
+                            <td>
+                                <span class="badge rounded-pill"
+                                      th:classappend="'badge-' + ${#strings.toLowerCase(s.status).replace('_','-')}"
+                                      th:text="${s.status}">PENDING</span>
+                            </td>
+                            <td class="text-muted" th:text="${s.sector ?: '—'}">—</td>
+                            <td class="text-muted"
+                                th:text="${#temporals.format(s.generatedAt, 'dd MMM HH:mm')}">01 Jan 09:15</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div><!-- /content-area -->
+</div><!-- /main -->
+
+<div th:replace="~{fragments/layout :: scripts}"></div>
+<script>
+    function tick() {
+        const now = new Date();
+        document.getElementById('clock').textContent =
+            now.toLocaleTimeString('en-IN', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+    }
+    tick(); setInterval(tick, 1000);
+    setTimeout(() => location.reload(), 60000);
+</script>
+</body>
+</html>

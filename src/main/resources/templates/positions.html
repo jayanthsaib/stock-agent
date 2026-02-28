@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Positions')}"></head>
+<body>
+
+<div th:replace="~{fragments/layout :: sidebar('positions')}"></div>
+
+<div id="main">
+    <!-- Top bar -->
+    <div id="topbar">
+        <div class="page-title"><i class="fa-solid fa-layer-group me-2" style="color:#58a6ff;"></i>Open Positions</div>
+        <span class="text-muted small" id="clock"></span>
+        <button class="btn btn-sm btn-outline-secondary ms-2" onclick="location.reload()" title="Refresh">
+            <i class="fa-solid fa-rotate-right"></i>
+        </button>
+    </div>
+
+    <div class="content-area">
+
+        <!-- Summary row -->
+        <div class="row g-3 mb-4">
+            <div class="col-md-3 col-sm-6">
+                <div class="stat-card h-100">
+                    <div class="label">Open Positions</div>
+                    <div class="value" th:text="${positions.size()}">0</div>
+                    <div class="sub">Currently active</div>
+                </div>
+            </div>
+            <div class="col-md-3 col-sm-6">
+                <div class="stat-card h-100">
+                    <div class="label">Capital Deployed</div>
+                    <div class="value" style="font-size:20px;"
+                         th:text="'₹' + ${#numbers.formatDecimal(positions.stream().mapToDouble(p -> p.capitalAllocationInr).sum(), 1, 0)}">₹0</div>
+                    <div class="sub">Total allocated</div>
+                </div>
+            </div>
+            <div class="col-md-3 col-sm-6">
+                <div class="stat-card h-100">
+                    <div class="label">Avg Confidence</div>
+                    <div class="value" style="font-size:20px; color:#3fb950;"
+                         th:text="${positions.isEmpty() ? '—' : #numbers.formatDecimal(positions.stream().mapToDouble(p -> p.confidenceScore).average().orElse(0), 1, 1) + '%'}">—</div>
+                    <div class="sub">At entry signal</div>
+                </div>
+            </div>
+            <div class="col-md-3 col-sm-6">
+                <div class="stat-card h-100">
+                    <div class="label">Avg Risk/Reward</div>
+                    <div class="value" style="font-size:20px;"
+                         th:text="${positions.isEmpty() ? '—' : #numbers.formatDecimal(positions.stream().mapToDouble(p -> p.riskRewardRatio).average().orElse(0), 1, 2) + 'x'}">—</div>
+                    <div class="sub">Entry R:R ratio</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Positions table -->
+        <div class="table-card">
+            <div class="card-header-bar">
+                <span><i class="fa-solid fa-layer-group me-2" style="color:#58a6ff;"></i>Active Positions</span>
+                <span class="text-muted small" th:text="${positions.size()} + ' positions'">0 positions</span>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Symbol</th>
+                            <th>Signal</th>
+                            <th>Entry Price</th>
+                            <th>Target</th>
+                            <th>Stop Loss</th>
+                            <th>R:R</th>
+                            <th>Capital</th>
+                            <th>Confidence</th>
+                            <th>Executed</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr th:if="${#lists.isEmpty(positions)}">
+                            <td colspan="9" class="text-center py-5" style="color:#8b949e;">
+                                <i class="fa-solid fa-inbox fa-2x mb-3 d-block"></i>
+                                No open positions. Signals that get approved will appear here.
+                            </td>
+                        </tr>
+                        <tr th:each="p : ${positions}">
+                            <td>
+                                <strong th:text="${p.symbol}">RELIANCE</strong>
+                                <span class="d-block text-muted" style="font-size:11px;" th:text="${p.exchange}">NSE</span>
+                                <span class="d-block text-muted" style="font-size:11px;" th:text="${p.sector}">—</span>
+                            </td>
+                            <td>
+                                <span class="badge rounded-pill"
+                                      th:classappend="'badge-' + ${#strings.toLowerCase(p.signalType)}"
+                                      th:text="${p.signalType}">BUY</span>
+                            </td>
+                            <td th:text="'₹' + ${#numbers.formatDecimal(p.entryPrice, 1, 2)}">₹0</td>
+                            <td>
+                                <span style="color:#3fb950;" th:text="'₹' + ${#numbers.formatDecimal(p.targetPrice, 1, 2)}">₹0</span>
+                                <span class="d-block text-muted" style="font-size:11px;"
+                                      th:text="'+' + ${#numbers.formatDecimal((p.targetPrice - p.entryPrice) / p.entryPrice * 100, 1, 1)} + '%'"></span>
+                            </td>
+                            <td>
+                                <span style="color:#f85149;" th:text="'₹' + ${#numbers.formatDecimal(p.stopLossPrice, 1, 2)}">₹0</span>
+                                <span class="d-block text-muted" style="font-size:11px;"
+                                      th:text="${#numbers.formatDecimal((p.stopLossPrice - p.entryPrice) / p.entryPrice * 100, 1, 1)} + '%'"></span>
+                            </td>
+                            <td th:text="${#numbers.formatDecimal(p.riskRewardRatio, 1, 2)} + 'x'">0x</td>
+                            <td th:text="'₹' + ${#numbers.formatDecimal(p.capitalAllocationInr, 1, 0)}">₹0</td>
+                            <td style="min-width:110px;">
+                                <div class="d-flex align-items-center gap-2">
+                                    <span th:text="${#numbers.formatDecimal(p.confidenceScore, 1, 1)} + '%'"
+                                          style="font-size:12px;width:40px;">75%</span>
+                                    <div class="conf-bar flex-fill">
+                                        <div class="conf-bar-fill"
+                                             th:classappend="${p.confidenceScore >= 75 ? 'conf-high' : (p.confidenceScore >= 55 ? 'conf-med' : 'conf-low')}"
+                                             th:style="'width:' + ${p.confidenceScore} + '%'"></div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="text-muted"
+                                th:text="${p.executedAt != null ? #temporals.format(p.executedAt, 'dd MMM HH:mm') : '—'}">—</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div><!-- /content-area -->
+</div><!-- /main -->
+
+<div th:replace="~{fragments/layout :: scripts}"></div>
+<script>
+    function tick() {
+        const now = new Date();
+        document.getElementById('clock').textContent =
+            now.toLocaleTimeString('en-IN', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+    }
+    tick(); setInterval(tick, 1000);
+    setTimeout(() => location.reload(), 60000);
+</script>
+</body>
+</html>

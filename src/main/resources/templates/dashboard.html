@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Dashboard')}"></head>
+<body>
+
+<div th:replace="~{fragments/layout :: sidebar('dashboard')}"></div>
+
+<div id="main">
+    <!-- Top bar -->
+    <div id="topbar">
+        <div class="page-title"><i class="fa-solid fa-gauge me-2" style="color:#58a6ff;"></i>Dashboard</div>
+        <span class="badge rounded-pill fs-xs" th:classappend="${modeBadge}" th:text="${mode}">PAPER TRADING</span>
+        <span class="text-muted small" id="clock"></span>
+        <button class="btn btn-sm btn-outline-secondary ms-2"
+                onclick="location.reload()" title="Refresh">
+            <i class="fa-solid fa-rotate-right"></i>
+        </button>
+    </div>
+
+    <div class="content-area">
+
+        <!-- ── Status row ──────────────────────────────────────────────── -->
+        <div class="row g-3 mb-4">
+
+            <!-- Broker -->
+            <div class="col-md-3 col-sm-6">
+                <div class="stat-card h-100">
+                    <div class="label">Broker</div>
+                    <div class="d-flex align-items-center gap-2 mt-1">
+                        <span class="dot" th:classappend="${brokerAuth ? 'dot-green' : 'dot-red'}"></span>
+                        <span class="value" style="font-size:18px;"
+                              th:text="${brokerAuth ? 'Connected' : 'Offline'}">Connected</span>
+                    </div>
+                    <div class="sub">Angel One SmartAPI</div>
+                </div>
+            </div>
+
+            <!-- Telegram -->
+            <div class="col-md-3 col-sm-6">
+                <div class="stat-card h-100">
+                    <div class="label">Telegram</div>
+                    <div class="d-flex align-items-center gap-2 mt-1">
+                        <span class="dot" th:classappend="${telegramOk ? 'dot-green' : 'dot-red'}"></span>
+                        <span class="value" style="font-size:18px;"
+                              th:text="${telegramOk ? 'Connected' : 'Offline'}">Connected</span>
+                    </div>
+                    <div class="sub">Bot polling active</div>
+                </div>
+            </div>
+
+            <!-- Execution mode -->
+            <div class="col-md-3 col-sm-6">
+                <div class="stat-card h-100">
+                    <div class="label">Execution</div>
+                    <div class="d-flex align-items-center gap-2 mt-1">
+                        <span class="dot" th:classappend="${autoMode ? 'dot-green' : 'dot-yellow'}"></span>
+                        <span class="value" style="font-size:18px;"
+                              th:text="${autoMode ? 'Auto' : 'Manual'}">Manual</span>
+                    </div>
+                    <div class="sub">Approval gateway</div>
+                </div>
+            </div>
+
+            <!-- Watchlist -->
+            <div class="col-md-3 col-sm-6">
+                <div class="stat-card h-100">
+                    <div class="label">Watchlist</div>
+                    <div class="value" th:text="${watchlistSize}">20</div>
+                    <div class="sub">Stocks monitored</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── Key metrics ─────────────────────────────────────────────── -->
+        <div class="row g-3 mb-4">
+            <div class="col-md-3 col-sm-6">
+                <div class="stat-card h-100" style="border-color:#1f6feb55;">
+                    <div class="label">Open Positions</div>
+                    <div class="value" th:text="${openCount}">0</div>
+                    <div class="sub"><a th:href="@{/ui/positions}" class="text-decoration-none" style="color:#58a6ff;">View all →</a></div>
+                </div>
+            </div>
+            <div class="col-md-3 col-sm-6">
+                <div class="stat-card h-100" style="border-color:#d2992255;">
+                    <div class="label">Pending Signals</div>
+                    <div class="value" style="color:#f0883e;" th:text="${pendingCount}">0</div>
+                    <div class="sub"><a th:href="@{/ui/signals}" class="text-decoration-none" style="color:#f0883e;">Review →</a></div>
+                </div>
+            </div>
+            <div class="col-md-3 col-sm-6">
+                <div class="stat-card h-100" style="border-color:#23863655;">
+                    <div class="label">Win Rate</div>
+                    <div class="value" style="color:#3fb950;" th:text="${winRate} + '%'">0.0%</div>
+                    <div class="sub">All closed trades</div>
+                </div>
+            </div>
+            <div class="col-md-3 col-sm-6">
+                <div class="stat-card h-100">
+                    <div class="label">Total P&amp;L</div>
+                    <div class="value"
+                         th:classappend="${#strings.startsWith(totalPnl,'-') ? 'pnl-negative' : 'pnl-positive'}"
+                         th:text="'₹' + ${totalPnl}">₹0</div>
+                    <div class="sub">Realised</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── Recent signals table ────────────────────────────────────── -->
+        <div class="table-card">
+            <div class="card-header-bar">
+                <span><i class="fa-solid fa-clock-rotate-left me-2" style="color:#58a6ff;"></i>Recent Signals (last 7 days)</span>
+                <a th:href="@{/ui/signals}" class="btn btn-sm btn-outline-secondary">See all</a>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Symbol</th>
+                            <th>Signal</th>
+                            <th>Confidence</th>
+                            <th>Entry</th>
+                            <th>Target</th>
+                            <th>Stop Loss</th>
+                            <th>Status</th>
+                            <th>Time</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr th:if="${#lists.isEmpty(recentSignals)}">
+                            <td colspan="8" class="text-center py-5" style="color:#8b949e;">
+                                <i class="fa-solid fa-chart-simple fa-2x mb-3 d-block"></i>
+                                No signals generated yet. The agent will analyse stocks at 9:15 AM IST.
+                            </td>
+                        </tr>
+                        <tr th:each="s : ${recentSignals}">
+                            <td><strong th:text="${s.symbol}">RELIANCE</strong>
+                                <span class="d-block text-muted" style="font-size:11px;" th:text="${s.exchange}">NSE</span>
+                            </td>
+                            <td>
+                                <span class="badge rounded-pill"
+                                      th:classappend="'badge-' + ${#strings.toLowerCase(s.signalType)}"
+                                      th:text="${s.signalType}">BUY</span>
+                            </td>
+                            <td style="min-width:110px;">
+                                <div class="d-flex align-items-center gap-2">
+                                    <span th:text="${#numbers.formatDecimal(s.confidenceScore,1,1)} + '%'"
+                                          style="font-size:12px;width:40px;">75%</span>
+                                    <div class="conf-bar flex-fill">
+                                        <div class="conf-bar-fill"
+                                             th:classappend="${s.confidenceScore >= 75 ? 'conf-high' : (s.confidenceScore >= 55 ? 'conf-med' : 'conf-low')}"
+                                             th:style="'width:' + ${s.confidenceScore} + '%'"></div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td th:text="'₹' + ${#numbers.formatDecimal(s.entryPrice,1,2)}">₹0</td>
+                            <td th:text="'₹' + ${#numbers.formatDecimal(s.targetPrice,1,2)}">₹0</td>
+                            <td th:text="'₹' + ${#numbers.formatDecimal(s.stopLossPrice,1,2)}">₹0</td>
+                            <td>
+                                <span class="badge rounded-pill"
+                                      th:classappend="'badge-' + ${#strings.toLowerCase(s.status).replace('_','-')}"
+                                      th:text="${s.status}">PENDING</span>
+                            </td>
+                            <td class="text-muted"
+                                th:text="${#temporals.format(s.generatedAt, 'dd MMM HH:mm')}">01 Jan 09:15</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div><!-- /content-area -->
+</div><!-- /main -->
+
+<div th:replace="~{fragments/layout :: scripts}"></div>
+<script>
+    // Live clock
+    function tick() {
+        const now = new Date();
+        document.getElementById('clock').textContent =
+            now.toLocaleTimeString('en-IN', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+    }
+    tick(); setInterval(tick, 1000);
+
+    // Auto-refresh every 60 s
+    setTimeout(() => location.reload(), 60000);
+</script>
+</body>
+</html>
