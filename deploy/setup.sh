@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
 # =============================================================================
-# setup.sh — One-shot bootstrap for AI Stock Trading Agent on Oracle Cloud
-#             Ubuntu 22.04 ARM (A1.Flex, Always Free)
+# setup.sh — One-shot bootstrap for AI Stock Trading Agent
+#             Ubuntu 22.04 — Oracle Cloud (A1.Flex) or Google Cloud (e2-micro)
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/jayanthsaib/stock-agent/master/deploy/setup.sh | bash
 # =============================================================================
 set -euo pipefail
 
 REPO_URL="https://github.com/jayanthsaib/stock-agent.git"
-APP_DIR="/home/ubuntu/stock-agent"
+CURRENT_USER=$(id -un)
+APP_DIR="$HOME/stock-agent"
 SERVICE_NAME="stock-agent"
 JAR_PATH="$APP_DIR/target/stock-agent-1.0-SNAPSHOT.jar"
 
@@ -16,11 +17,11 @@ info()  { echo -e "\e[32m[INFO]\e[0m  $*"; }
 warn()  { echo -e "\e[33m[WARN]\e[0m  $*"; }
 error() { echo -e "\e[31m[ERROR]\e[0m $*" >&2; exit 1; }
 
-# ── 1. Require Ubuntu ─────────────────────────────────────────────────────────
+# ── 1. Require Linux ──────────────────────────────────────────────────────────
 [[ "$(uname -s)" == "Linux" ]] || error "This script is for Linux only."
-id ubuntu &>/dev/null || error "User 'ubuntu' not found. Run this on an Oracle Ubuntu VM."
 
 info "=== AI Stock Trading Agent — Server Bootstrap ==="
+info "Running as user: $CURRENT_USER"
 info "Target directory: $APP_DIR"
 
 # ── 2. Install Java 21 (Eclipse Temurin) ──────────────────────────────────────
@@ -81,7 +82,6 @@ if [[ ! -f "$ENV_FILE" ]]; then
   echo ""
   read -rp "Press ENTER after you have edited $ENV_FILE to continue setup... "
   echo ""
-  # Validate that the user actually filled in the file (not just example values)
   if grep -q "your_" "$ENV_FILE" 2>/dev/null; then
     warn "Placeholder values detected in .env — the agent may not function correctly."
     warn "Edit $ENV_FILE and restart the service when ready."
@@ -99,23 +99,25 @@ info "Build complete: $JAR_PATH"
 
 # ── 7. Create log directory ───────────────────────────────────────────────────
 mkdir -p "$APP_DIR/logs"
-chown ubuntu:ubuntu "$APP_DIR/logs" 2>/dev/null || true
+chown "$CURRENT_USER:$CURRENT_USER" "$APP_DIR/logs" 2>/dev/null || true
 
-# ── 8. Install systemd service ────────────────────────────────────────────────
+# ── 8. Install systemd service (patched for current user) ─────────────────────
 info "Installing systemd service ($SERVICE_NAME)..."
-sudo cp "$APP_DIR/deploy/stock-agent.service" "/etc/systemd/system/${SERVICE_NAME}.service"
+SERVICE_TMP="/tmp/${SERVICE_NAME}.service"
+sed -e "s|User=ubuntu|User=$CURRENT_USER|g" \
+    -e "s|/home/ubuntu/|$HOME/|g" \
+    "$APP_DIR/deploy/stock-agent.service" > "$SERVICE_TMP"
+sudo cp "$SERVICE_TMP" "/etc/systemd/system/${SERVICE_NAME}.service"
 sudo systemctl daemon-reload
 sudo systemctl enable "$SERVICE_NAME"
 sudo systemctl restart "$SERVICE_NAME"
 
 # ── 9. Open port 8080 in iptables ────────────────────────────────────────────
 info "Opening port 8080 in iptables..."
-# Only add rule if it doesn't already exist
 if ! sudo iptables -C INPUT -p tcp --dport 8080 -j ACCEPT 2>/dev/null; then
   sudo iptables -I INPUT -p tcp --dport 8080 -j ACCEPT
 fi
 
-# Persist iptables rules across reboots
 if command -v netfilter-persistent &>/dev/null; then
   sudo netfilter-persistent save
 else
