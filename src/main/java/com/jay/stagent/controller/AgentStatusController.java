@@ -6,6 +6,7 @@ import com.jay.stagent.layer1_data.AngelOneClient;
 import com.jay.stagent.layer1_data.DataIngestionEngine;
 import com.jay.stagent.layer3_signal.SignalGenerator;
 import com.jay.stagent.layer3_signal.StockAnalysisService;
+import com.jay.stagent.layer4_risk.RiskValidator;
 import com.jay.stagent.layer6_execution.ApprovalGateway;
 import com.jay.stagent.layer7_monitor.LearningEngine;
 import com.jay.stagent.model.StockAnalysisResult;
@@ -51,6 +52,7 @@ public class AgentStatusController {
     private final StockAnalysisService stockAnalysisService;
     private final DataIngestionEngine dataIngestionEngine;
     private final SignalGenerator signalGenerator;
+    private final RiskValidator riskValidator;
 
     // ── GET /api/status ────────────────────────────────────────────────────────
 
@@ -183,6 +185,43 @@ public class AgentStatusController {
             "notifyThreshold", notifyThreshold,
             "alerts", alerts,
             "results", results
+        ));
+    }
+
+    // ── POST /api/signals/submit ───────────────────────────────────────────────
+    // Runs the full pipeline identical to the 9:15 AM scheduler:
+    //   generateSignals → riskValidator → approvalGateway.submitForApproval
+    // Each signal that passes risk validation is sent to Telegram for APPROVE/REJECT.
+
+    @PostMapping("/signals/submit")
+    public ResponseEntity<Map<String, Object>> submitSignals() {
+        List<TradeRecord> openPositions = tradeRepo.findByStatus("EXECUTED");
+        List<TradeSignal> signals = signalGenerator.generateSignals();
+
+        int submitted = 0, riskRejected = 0;
+        List<String> submittedIds = new ArrayList<>();
+        List<String> rejectedReasons = new ArrayList<>();
+
+        for (TradeSignal signal : signals) {
+            RiskValidator.ValidationResult validation =
+                riskValidator.validate(signal, openPositions);
+            if (validation.passed()) {
+                approvalGateway.submitForApproval(signal, validation);
+                submittedIds.add(signal.getSymbol() + " (" + signal.getTradeId() + ")");
+                submitted++;
+            } else {
+                rejectedReasons.add(signal.getSymbol() + ": " + validation.failures());
+                riskRejected++;
+            }
+        }
+
+        return ResponseEntity.ok(Map.of(
+            "generatedAt", LocalDateTime.now().toString(),
+            "totalSignals", signals.size(),
+            "submittedToTelegram", submitted,
+            "riskRejected", riskRejected,
+            "submitted", submittedIds,
+            "rejected", rejectedReasons
         ));
     }
 
