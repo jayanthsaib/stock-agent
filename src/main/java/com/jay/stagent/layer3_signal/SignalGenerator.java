@@ -120,6 +120,13 @@ public class SignalGenerator {
             double target      = computeTarget(entryPrice, technicalResult.resistanceLevel());
             double rrRatio     = computeRR(entryPrice, stopLoss, target);
 
+            // Hard reject: R:R below configured minimum
+            if (rrRatio < config.risk().getMinRiskRewardRatio()) {
+                log.debug("{} rejected: R:R {:.2f} < minimum {:.1f}",
+                    symbol, rrRatio, config.risk().getMinRiskRewardRatio());
+                return null;
+            }
+
             // Score R:R
             double rrScore = scoreRiskReward(rrRatio);
             score.setRiskRewardScore(rrScore);

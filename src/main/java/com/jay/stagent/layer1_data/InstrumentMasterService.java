@@ -197,6 +197,11 @@ public class InstrumentMasterService {
 
                 if (symbol.isEmpty() || token.isEmpty()) continue;
 
+                // Skip ETFs and index funds — only load tradable equities
+                String nameUpper = name.toUpperCase();
+                if (nameUpper.contains("ETF") || nameUpper.contains("BEES")
+                        || nameUpper.contains("INDEX FUND")) continue;
+
                 newTokenMap.computeIfAbsent(exch, k -> new ConcurrentHashMap<>())
                     .put(symbol, token);
                 newInstrumentMap.computeIfAbsent(exch, k -> new ConcurrentHashMap<>())
