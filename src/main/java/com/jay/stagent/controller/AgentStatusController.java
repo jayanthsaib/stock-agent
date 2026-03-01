@@ -152,9 +152,9 @@ public class AgentStatusController {
         List<String> watchlist = config.watchlist();
         long startMs = System.currentTimeMillis();
 
-        // Analyse all stocks in parallel using virtual threads
+        // Limit to 4 concurrent requests — Angel One rate-limits beyond this.
         List<StockAnalysisResult> results;
-        try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+        try (var executor = Executors.newFixedThreadPool(4)) {
             List<CompletableFuture<StockAnalysisResult>> futures = watchlist.stream()
                 .map(symbol -> CompletableFuture.supplyAsync(
                     () -> stockAnalysisService.analyse(symbol), executor))
