@@ -195,8 +195,11 @@ public class DataIngestionEngine {
         }
         log.info("Phase 1 {}: resolved {} tokens from {} symbols", exchange, tokenList.size(), symbols.size());
 
-        // Batch into groups of QUOTE_BATCH_SIZE
+        // Batch into groups of QUOTE_BATCH_SIZE with a small delay to avoid rate-limiting
         for (int i = 0; i < tokenList.size(); i += QUOTE_BATCH_SIZE) {
+            if (i > 0) {
+                try { Thread.sleep(200); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); break; }
+            }
             List<String> batch = tokenList.subList(i, Math.min(i + QUOTE_BATCH_SIZE, tokenList.size()));
             try {
                 JsonNode data = angelOneClient.getQuote(exchange, batch);
