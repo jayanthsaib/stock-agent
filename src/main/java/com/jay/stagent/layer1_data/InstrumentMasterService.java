@@ -206,7 +206,8 @@ public class InstrumentMasterService {
                         || nameUpper.contains("LIQUID BEES") || nameUpper.contains("GILT FUND");
                 boolean isEtfBySymbol = symbolUpper.startsWith("LIQUID") || symbolUpper.startsWith("GILT")
                         || symbolUpper.endsWith("ETF") || symbolUpper.endsWith("IETF")
-                        || symbolUpper.endsWith("BEES");
+                        || symbolUpper.endsWith("BEES") || symbolUpper.contains("BETA")
+                        || symbolUpper.contains("NIFTY") || symbolUpper.contains("SENSEX");
                 if (isEtfByName || isEtfBySymbol) continue;
 
                 newTokenMap.computeIfAbsent(exch, k -> new ConcurrentHashMap<>())
