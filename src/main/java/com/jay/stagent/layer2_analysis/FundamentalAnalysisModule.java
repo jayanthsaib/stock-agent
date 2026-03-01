@@ -6,16 +6,19 @@ import com.jay.stagent.config.AgentConfig;
 import com.jay.stagent.model.FundamentalData;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import okhttp3.JavaNetCookieJar;
+import okhttp3.Cookie;
+import okhttp3.CookieJar;
+import okhttp3.HttpUrl;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
 import org.springframework.stereotype.Component;
 
-import java.net.CookieManager;
-import java.net.CookiePolicy;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -32,13 +35,22 @@ import java.util.concurrent.TimeUnit;
 public class FundamentalAnalysisModule {
 
     private final AgentConfig config;
-    // CookieJar automatically stores and re-sends cookies across requests,
-    // equivalent to curl -c/-b — needed for Yahoo Finance session auth.
-    private final CookieManager cookieMgr = new CookieManager(null, CookiePolicy.ACCEPT_ALL);
+    // Simple in-memory CookieJar — stores all cookies and matches them by URL
+    // using OkHttp's own Cookie.matches(), equivalent to curl -c/-b.
+    private final List<Cookie> cookieStore = new CopyOnWriteArrayList<>();
     private final OkHttpClient httpClient = new OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
-        .cookieJar(new JavaNetCookieJar(cookieMgr))
+        .cookieJar(new CookieJar() {
+            @Override public void saveFromResponse(HttpUrl url, List<Cookie> cookies) {
+                cookieStore.addAll(cookies);
+            }
+            @Override public List<Cookie> loadForRequest(HttpUrl url) {
+                List<Cookie> matched = new ArrayList<>();
+                for (Cookie c : cookieStore) { if (c.matches(url)) matched.add(c); }
+                return matched;
+            }
+        })
         .build();
     private final ObjectMapper mapper = new ObjectMapper();
 
@@ -218,7 +230,7 @@ public class FundamentalAnalysisModule {
                 if (response.code() == 401 && !isRetry) {
                     log.warn("Yahoo Finance 401 for {} — refreshing crumb and retrying", symbol);
                     yahooCrumb = null;
-                    cookieMgr.getCookieStore().removeAll();
+                    cookieStore.clear();
                     initYahooCredentials();
                     if (yahooCrumb == null) return buildDefaultFundamental(symbol);
                     return doYahooFetch(symbol, true);
