@@ -19,6 +19,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -55,6 +56,9 @@ public class FundamentalAnalysisModule {
     private final ObjectMapper mapper = new ObjectMapper();
 
     private volatile String yahooCrumb = null;
+
+    // Cap concurrent Yahoo Finance calls to avoid rate-limiting when bulk analysis runs
+    private static final Semaphore yahooRateLimiter = new Semaphore(5);
 
     public record FundamentalResult(double score, String summary, FundamentalData data) {}
 
@@ -211,7 +215,17 @@ public class FundamentalAnalysisModule {
             log.warn("Yahoo Finance crumb unavailable — returning defaults for {}", symbol);
             return buildDefaultFundamental(symbol);
         }
-        return doYahooFetch(symbol, false);
+        try {
+            yahooRateLimiter.acquire();
+            try {
+                return doYahooFetch(symbol, false);
+            } finally {
+                yahooRateLimiter.release();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return buildDefaultFundamental(symbol);
+        }
     }
 
     private FundamentalData doYahooFetch(String symbol, boolean isRetry) {

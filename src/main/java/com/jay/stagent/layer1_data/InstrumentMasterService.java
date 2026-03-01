@@ -197,10 +197,17 @@ public class InstrumentMasterService {
 
                 if (symbol.isEmpty() || token.isEmpty()) continue;
 
-                // Skip ETFs and index funds — only load tradable equities
-                String nameUpper = name.toUpperCase();
-                if (nameUpper.contains("ETF") || nameUpper.contains("BEES")
-                        || nameUpper.contains("INDEX FUND")) continue;
+                // Skip ETFs, liquid funds, gilt funds — only load tradable equities.
+                // Filter by both instrument name and symbol to catch all variants.
+                String nameUpper   = name.toUpperCase();
+                String symbolUpper = symbol.toUpperCase();
+                boolean isEtfByName = nameUpper.contains("ETF") || nameUpper.contains("BEES")
+                        || nameUpper.contains("INDEX FUND") || nameUpper.contains("LIQUID FUND")
+                        || nameUpper.contains("LIQUID BEES") || nameUpper.contains("GILT FUND");
+                boolean isEtfBySymbol = symbolUpper.startsWith("LIQUID") || symbolUpper.startsWith("GILT")
+                        || symbolUpper.endsWith("ETF") || symbolUpper.endsWith("IETF")
+                        || symbolUpper.endsWith("BEES");
+                if (isEtfByName || isEtfBySymbol) continue;
 
                 newTokenMap.computeIfAbsent(exch, k -> new ConcurrentHashMap<>())
                     .put(symbol, token);
