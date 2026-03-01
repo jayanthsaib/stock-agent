@@ -49,8 +49,9 @@ public class DataIngestionEngine {
     private MacroData latestMacroData;
     private LocalDateTime lastCacheRefresh;
 
-    // Rate-limiter: cap concurrent historical fetches to 10 at a time
-    private final Semaphore fetchSemaphore = new Semaphore(10);
+    // Rate-limiter: Angel One historical API rate-limits on concurrent calls —
+    // keep fetches strictly sequential (1 permit) with a 500 ms gap between each.
+    private final Semaphore fetchSemaphore = new Semaphore(1);
     private final ExecutorService fetchExecutor = Executors.newVirtualThreadPerTaskExecutor();
 
     // Ordered list of symbols that were analysed in the last refresh cycle
@@ -271,6 +272,7 @@ public class DataIngestionEngine {
                                 stockDataCache.put(symbol, data);
                             }
                         }
+                        Thread.sleep(500); // avoid Angel One rate-limit between sequential fetches
                     } finally {
                         fetchSemaphore.release();
                     }
