@@ -57,7 +57,7 @@ public class DataIngestionEngine {
     // Ordered list of symbols that were analysed in the last refresh cycle
     private final List<String> analysisUniverse = new CopyOnWriteArrayList<>();
 
-    private static final int QUOTE_BATCH_SIZE = 250; // Angel One getQuote() limit
+    private static final int QUOTE_BATCH_SIZE = 50; // Angel One market/v1/quote hard limit
 
     private final OkHttpClient yahooClient = new OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
