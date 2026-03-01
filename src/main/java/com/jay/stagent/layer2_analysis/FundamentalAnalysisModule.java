@@ -34,11 +34,6 @@ public class FundamentalAnalysisModule {
     private final OkHttpClient httpClient = new OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
-        .addInterceptor(chain -> chain.proceed(
-            chain.request().newBuilder()
-                .addHeader("User-Agent", "Mozilla/5.0")
-                .build()
-        ))
         .build();
     private final ObjectMapper mapper = new ObjectMapper();
 
@@ -260,19 +255,45 @@ public class FundamentalAnalysisModule {
             JsonNode summary   = data.path("summaryDetail");
             JsonNode profile   = data.path("assetProfile");
 
-            // ROE: Yahoo returns as decimal (0.15 = 15%)
-            double roe     = financial.path("returnOnEquity").path("raw").asDouble(0) * 100;
-            // Approximate ROCE from return on assets
-            double roce    = financial.path("returnOnAssets").path("raw").asDouble(0) * 150;
-            // D/E: Yahoo returns as percentage (52.5 = D/E ratio of 0.525)
-            double de      = keyStats.path("debtToEquity").path("raw").asDouble(0) / 100;
-            double pe      = summary.path("trailingPE").path("raw").asDouble(0);
-            double pb      = summary.path("priceToBook").path("raw").asDouble(0);
-            double peg     = keyStats.path("pegRatio").path("raw").asDouble(0);
+            // D/E: Yahoo stores as percentage (35.651 → D/E ratio of 0.356).
+            // Use -1 as sentinel to detect a genuinely missing field vs a zero value.
+            double deRaw = keyStats.path("debtToEquity").path("raw").asDouble(-1);
+            double de    = deRaw >= 0 ? deRaw / 100 : 0;
+
+            // ROE: Yahoo's financialData.returnOnEquity is often absent for Indian stocks.
+            // Fallback: approximate from trailingEps / bookValue (both per-share).
+            double roeDirectRaw = financial.path("returnOnEquity").path("raw").asDouble(0) * 100;
+            double roe;
+            if (roeDirectRaw != 0) {
+                roe = roeDirectRaw;
+            } else {
+                double eps = keyStats.path("trailingEps").path("raw").asDouble(0);
+                double bv  = keyStats.path("bookValue").path("raw").asDouble(0);
+                roe = (eps > 0 && bv > 0) ? (eps / bv) * 100 : 0;
+            }
+
+            // ROCE: approximate from returnOnAssets if available; else use ROE * 0.8
+            double roceRaw = financial.path("returnOnAssets").path("raw").asDouble(0) * 150;
+            double roce    = roceRaw > 0 ? roceRaw : roe * 0.8;
+
+            double pe        = summary.path("trailingPE").path("raw").asDouble(0);
+            double pb        = summary.path("priceToBook").path("raw").asDouble(0);
+            double peg       = keyStats.path("pegRatio").path("raw").asDouble(0);
             double revGrowth = financial.path("revenueGrowth").path("raw").asDouble(0) * 100;
-            double ocf     = financial.path("operatingCashflow").path("raw").asDouble(0);
-            double fcf     = financial.path("freeCashflow").path("raw").asDouble(0);
-            String sector  = profile.path("sector").asText("Unknown");
+            double ocf       = financial.path("operatingCashflow").path("raw").asDouble(0);
+            double fcf       = financial.path("freeCashflow").path("raw").asDouble(0);
+
+            // OCF proxy: if operatingCashflow field is absent, infer from gross profit.
+            // A profitable business with gross profit almost certainly has positive OCF.
+            boolean positiveOcf = ocf > 0
+                || financial.path("grossProfits").path("raw").asDouble(0) > 0;
+
+            String sector = profile.path("sector").asText("Unknown");
+
+            log.info("Yahoo parsed {}: ROE={}% D/E={} PE={} revGrowth={}% positiveOcf={} sector={}",
+                symbol, Math.round(roe), Math.round(de * 1000) / 1000.0,
+                Math.round(pe * 10) / 10.0, Math.round(revGrowth * 10) / 10.0,
+                positiveOcf, sector);
 
             return FundamentalData.builder()
                 .symbol(symbol)
@@ -280,11 +301,11 @@ public class FundamentalAnalysisModule {
                 .revenueCagr5y(revGrowth)
                 .netProfitCagr3y(financial.path("earningsGrowth").path("raw").asDouble(0) * 100)
                 .roe(roe)
-                .roce(roce > 0 ? roce : roe * 0.8)
+                .roce(roce)
                 .debtToEquity(de)
                 .operatingCashFlow(ocf)
                 .freeCashFlow(fcf)
-                .positiveCfYears(ocf > 0 ? 4 : 2)
+                .positiveCfYears(positiveOcf ? 4 : 2)
                 .promoterHoldingPct(50)
                 .promoterPledgedPct(0)
                 .peRatio(pe)
