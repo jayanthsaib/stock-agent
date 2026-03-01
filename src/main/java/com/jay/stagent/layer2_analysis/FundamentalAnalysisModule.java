@@ -6,16 +6,17 @@ import com.jay.stagent.config.AgentConfig;
 import com.jay.stagent.model.FundamentalData;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import okhttp3.JavaNetCookieJar;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
 import org.springframework.stereotype.Component;
 
+import java.net.CookieManager;
+import java.net.CookiePolicy;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-import java.util.List;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 
 /**
  * Layer 2 — Fundamental Analysis Module.
@@ -31,14 +32,17 @@ import java.util.stream.Collectors;
 public class FundamentalAnalysisModule {
 
     private final AgentConfig config;
+    // CookieJar automatically stores and re-sends cookies across requests,
+    // equivalent to curl -c/-b — needed for Yahoo Finance session auth.
+    private final CookieManager cookieMgr = new CookieManager(null, CookiePolicy.ACCEPT_ALL);
     private final OkHttpClient httpClient = new OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
+        .cookieJar(new JavaNetCookieJar(cookieMgr))
         .build();
     private final ObjectMapper mapper = new ObjectMapper();
 
-    private volatile String yahooCrumb  = null;
-    private volatile String yahooCookie = null;
+    private volatile String yahooCrumb = null;
 
     public record FundamentalResult(double score, String summary, FundamentalData data) {}
 
@@ -146,7 +150,8 @@ public class FundamentalAnalysisModule {
     private synchronized void initYahooCredentials() {
         if (yahooCrumb != null) return; // another thread already refreshed
         try {
-            // Step 1 — visit fc.yahoo.com to receive session cookies
+            // Step 1 — visit fc.yahoo.com; the CookieJar stores all Set-Cookie headers
+            // automatically (including those from redirect chains), just like curl -c/-b.
             Request fcReq = new Request.Builder()
                 .url("https://fc.yahoo.com")
                 .addHeader("User-Agent",
@@ -154,25 +159,16 @@ public class FundamentalAnalysisModule {
                     + "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
                 .addHeader("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
                 .get().build();
-            String cookie;
             try (Response fcResp = httpClient.newCall(fcReq).execute()) {
-                List<String> setCookies = fcResp.headers("Set-Cookie");
-                if (setCookies.isEmpty()) {
-                    log.warn("Yahoo Finance: no cookies received from fc.yahoo.com");
-                    return;
-                }
-                cookie = setCookies.stream()
-                    .map(c -> c.split(";")[0])
-                    .collect(Collectors.joining("; "));
+                log.debug("fc.yahoo.com responded with HTTP {}", fcResp.code());
             }
 
-            // Step 2 — exchange cookies for a crumb
+            // Step 2 — get crumb; cookies are sent automatically by the CookieJar
             Request crumbReq = new Request.Builder()
                 .url("https://query2.finance.yahoo.com/v1/test/getcrumb")
                 .addHeader("User-Agent",
                     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
                     + "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-                .addHeader("Cookie", cookie)
                 .addHeader("Accept", "text/plain")
                 .get().build();
             try (Response crumbResp = httpClient.newCall(crumbReq).execute()) {
@@ -185,8 +181,7 @@ public class FundamentalAnalysisModule {
                     log.warn("Yahoo Finance: invalid crumb received: {}", crumb);
                     return;
                 }
-                yahooCookie = cookie;
-                yahooCrumb  = crumb;
+                yahooCrumb = crumb;
                 log.info("Yahoo Finance credentials initialised (crumb length={})", crumb.length());
             }
         } catch (Exception e) {
@@ -218,13 +213,12 @@ public class FundamentalAnalysisModule {
                 .addHeader("User-Agent",
                     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
                 .addHeader("Accept", "application/json")
-                .addHeader("Cookie", yahooCookie)
                 .get().build();
             try (Response response = httpClient.newCall(request).execute()) {
                 if (response.code() == 401 && !isRetry) {
                     log.warn("Yahoo Finance 401 for {} — refreshing crumb and retrying", symbol);
-                    yahooCrumb  = null;
-                    yahooCookie = null;
+                    yahooCrumb = null;
+                    cookieMgr.getCookieStore().removeAll();
                     initYahooCredentials();
                     if (yahooCrumb == null) return buildDefaultFundamental(symbol);
                     return doYahooFetch(symbol, true);
