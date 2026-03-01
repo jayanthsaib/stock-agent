@@ -118,9 +118,17 @@ public class AngelOneClient {
                     .toList()
             );
             String response = post("/rest/secure/angelbroking/market/v1/quote", body.toString(), true);
-            return objectMapper.readTree(response).path("data");
+            JsonNode root = objectMapper.readTree(response);
+            if (!root.path("status").asBoolean()) {
+                log.warn("getQuote returned status=false for {} tokens on {}: {}",
+                    symbolTokens.size(), exchange, root.path("message").asText());
+            }
+            JsonNode dataNode = root.path("data");
+            // Return empty object if data is null/missing so callers can safely path into it
+            return (dataNode.isNull() || dataNode.isMissingNode())
+                ? objectMapper.createObjectNode() : dataNode;
         } catch (Exception e) {
-            log.error("getQuote failed for {}: {}", symbolTokens, e.getMessage());
+            log.error("getQuote failed for {}: {}", symbolTokens.size(), e.getMessage());
             return objectMapper.createObjectNode();
         }
     }
