@@ -204,12 +204,8 @@ public class DataIngestionEngine {
                 JsonNode fetched = data.path("fetched");
                 if (fetched.isArray()) {
                     for (JsonNode item : fetched) {
-                        String token   = item.path("symbolToken").asText("");
-                        double ltp     = item.path("ltp").asDouble(0);
-                        // Angel One FULL-mode quote returns tradeVolume (shares), not a value field.
-                        // Compute traded value in Crores as: (shares × LTP) / 1,00,00,000
-                        long tradeVolume = item.path("tradeVolume").asLong(0);
-                        double tradedValCr = (tradeVolume * ltp) / 10_000_000.0;
+                        String token = item.path("symbolToken").asText("");
+                        double ltp   = item.path("ltp").asDouble(0);
 
                         String sym = tokenToSymbol.get(token);
                         if (sym == null) continue;
@@ -217,7 +213,11 @@ public class DataIngestionEngine {
                         // Watchlist always added (already in candidates)
                         if (watchlistSet.contains(sym)) continue;
 
-                        if (ltp >= minPrice && tradedValCr >= minVolumeCr) {
+                        // Phase 1: price filter only — volume is verified precisely in
+                        // Phase 2 using the 20-day average from historical OHLCV data.
+                        // (tradeVolume from the live quote API is 0 outside market hours,
+                        //  so a volume filter here would eliminate everything after close.)
+                        if (ltp >= minPrice) {
                             candidates.add(sym);
                         }
                     }
