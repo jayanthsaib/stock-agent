@@ -14,8 +14,12 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executors;
+import java.util.stream.Collectors;
 
 /**
  * REST API — Agent Status & Monitoring Dashboard.
@@ -137,5 +141,46 @@ public class AgentStatusController {
     public ResponseEntity<StockAnalysisResult> analyseStock(@PathVariable String symbol) {
         StockAnalysisResult result = stockAnalysisService.analyse(symbol);
         return ResponseEntity.ok(result);
+    }
+
+    // ── POST /api/scan ─────────────────────────────────────────────────────────
+    // Runs full analysis on every watchlist stock in parallel and returns
+    // results sorted by composite score descending, with a summary header.
+
+    @PostMapping("/scan")
+    public ResponseEntity<Map<String, Object>> scanWatchlist() {
+        List<String> watchlist = config.watchlist();
+        long startMs = System.currentTimeMillis();
+
+        // Analyse all stocks in parallel using virtual threads
+        List<StockAnalysisResult> results;
+        try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            List<CompletableFuture<StockAnalysisResult>> futures = watchlist.stream()
+                .map(symbol -> CompletableFuture.supplyAsync(
+                    () -> stockAnalysisService.analyse(symbol), executor))
+                .toList();
+            results = futures.stream()
+                .map(CompletableFuture::join)
+                .sorted(Comparator.comparingDouble(StockAnalysisResult::getCompositeScore).reversed())
+                .collect(Collectors.toList());
+        }
+
+        long elapsedSec = (System.currentTimeMillis() - startMs) / 1000;
+        double notifyThreshold = config.signal().getMinConfidenceToNotify();
+
+        List<String> alerts = results.stream()
+            .filter(r -> r.getCompositeScore() >= notifyThreshold)
+            .map(r -> r.getSymbol() + " (" + String.format("%.1f", r.getCompositeScore()) + ")")
+            .collect(Collectors.toList());
+
+        return ResponseEntity.ok(Map.of(
+            "scannedAt", LocalDateTime.now().toString(),
+            "elapsedSeconds", elapsedSec,
+            "totalScanned", results.size(),
+            "aboveThreshold", alerts.size(),
+            "notifyThreshold", notifyThreshold,
+            "alerts", alerts,
+            "results", results
+        ));
     }
 }
