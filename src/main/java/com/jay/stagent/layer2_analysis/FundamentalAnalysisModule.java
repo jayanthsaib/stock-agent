@@ -11,7 +11,11 @@ import okhttp3.Request;
 import okhttp3.Response;
 import org.springframework.stereotype.Component;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 /**
  * Layer 2 — Fundamental Analysis Module.
@@ -37,6 +41,9 @@ public class FundamentalAnalysisModule {
         ))
         .build();
     private final ObjectMapper mapper = new ObjectMapper();
+
+    private volatile String yahooCrumb  = null;
+    private volatile String yahooCookie = null;
 
     public record FundamentalResult(double score, String summary, FundamentalData data) {}
 
@@ -136,20 +143,97 @@ public class FundamentalAnalysisModule {
     // ── Data Fetching ──────────────────────────────────────────────────────────
 
     /**
-     * Fetches fundamental data from Yahoo Finance quoteSummary API.
-     * Endpoint: https://query1.finance.yahoo.com/v10/finance/quoteSummary/{symbol}.NS
+     * Obtains a Yahoo Finance session cookie (from fc.yahoo.com) and crumb
+     * (from query2.finance.yahoo.com/v1/test/getcrumb).  Both are cached in
+     * volatile fields and reused across calls.  Called lazily before the first
+     * quoteSummary request and on 401 to refresh.
+     */
+    private synchronized void initYahooCredentials() {
+        if (yahooCrumb != null) return; // another thread already refreshed
+        try {
+            // Step 1 — visit fc.yahoo.com to receive session cookies
+            Request fcReq = new Request.Builder()
+                .url("https://fc.yahoo.com")
+                .addHeader("User-Agent",
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                    + "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+                .addHeader("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+                .get().build();
+            String cookie;
+            try (Response fcResp = httpClient.newCall(fcReq).execute()) {
+                List<String> setCookies = fcResp.headers("Set-Cookie");
+                if (setCookies.isEmpty()) {
+                    log.warn("Yahoo Finance: no cookies received from fc.yahoo.com");
+                    return;
+                }
+                cookie = setCookies.stream()
+                    .map(c -> c.split(";")[0])
+                    .collect(Collectors.joining("; "));
+            }
+
+            // Step 2 — exchange cookies for a crumb
+            Request crumbReq = new Request.Builder()
+                .url("https://query2.finance.yahoo.com/v1/test/getcrumb")
+                .addHeader("User-Agent",
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                    + "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+                .addHeader("Cookie", cookie)
+                .addHeader("Accept", "text/plain")
+                .get().build();
+            try (Response crumbResp = httpClient.newCall(crumbReq).execute()) {
+                if (!crumbResp.isSuccessful() || crumbResp.body() == null) {
+                    log.warn("Yahoo Finance: crumb request returned {}", crumbResp.code());
+                    return;
+                }
+                String crumb = crumbResp.body().string().trim();
+                if (crumb.isEmpty() || crumb.startsWith("{")) {
+                    log.warn("Yahoo Finance: invalid crumb received: {}", crumb);
+                    return;
+                }
+                yahooCookie = cookie;
+                yahooCrumb  = crumb;
+                log.info("Yahoo Finance credentials initialised (crumb length={})", crumb.length());
+            }
+        } catch (Exception e) {
+            log.error("Yahoo Finance credential init failed: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Fetches fundamental data from Yahoo Finance quoteSummary API using crumb auth.
+     * Endpoint: https://query2.finance.yahoo.com/v10/finance/quoteSummary/{symbol}.NS
      */
     private FundamentalData fetchFromYahoo(String symbol) {
-        String url = "https://query1.finance.yahoo.com/v10/finance/quoteSummary/" + symbol
-            + ".NS?modules=financialData,defaultKeyStatistics,summaryDetail,assetProfile";
+        if (yahooCrumb == null) initYahooCredentials();
+        if (yahooCrumb == null) {
+            log.warn("Yahoo Finance crumb unavailable — returning defaults for {}", symbol);
+            return buildDefaultFundamental(symbol);
+        }
+        return doYahooFetch(symbol, false);
+    }
+
+    private FundamentalData doYahooFetch(String symbol, boolean isRetry) {
         try {
+            String encodedCrumb = URLEncoder.encode(yahooCrumb, StandardCharsets.UTF_8);
+            String url = "https://query2.finance.yahoo.com/v10/finance/quoteSummary/" + symbol
+                + ".NS?modules=financialData,defaultKeyStatistics,summaryDetail,assetProfile"
+                + "&crumb=" + encodedCrumb;
             Request request = new Request.Builder()
                 .url(url)
-                .addHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+                .addHeader("User-Agent",
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
                 .addHeader("Accept", "application/json")
-                .get()
-                .build();
+                .addHeader("Cookie", yahooCookie)
+                .get().build();
             try (Response response = httpClient.newCall(request).execute()) {
+                if (response.code() == 401 && !isRetry) {
+                    log.warn("Yahoo Finance 401 for {} — refreshing crumb and retrying", symbol);
+                    yahooCrumb  = null;
+                    yahooCookie = null;
+                    initYahooCredentials();
+                    if (yahooCrumb == null) return buildDefaultFundamental(symbol);
+                    return doYahooFetch(symbol, true);
+                }
                 if (!response.isSuccessful() || response.body() == null) {
                     log.warn("Yahoo Finance returned {} for {}", response.code(), symbol);
                     return buildDefaultFundamental(symbol);
