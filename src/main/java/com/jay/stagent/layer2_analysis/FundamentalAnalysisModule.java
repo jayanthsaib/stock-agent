@@ -272,9 +272,10 @@ public class FundamentalAnalysisModule {
             JsonNode profile   = valNode.path("assetProfile");
 
             // D/E: Yahoo stores as percentage (35.651 → D/E ratio of 0.356).
-            // Use -1 as sentinel to detect a genuinely missing field vs a zero value.
+            // financialData also carries debtToEquity — try both modules.
             double deRaw = keyStats.path("debtToEquity").path("raw").asDouble(-1);
-            double de    = deRaw >= 0 ? deRaw / 100 : 0;
+            if (deRaw <= 0) deRaw = financial.path("debtToEquity").path("raw").asDouble(-1);
+            double de = (deRaw > 0) ? deRaw / 100 : 0.5; // 0.5 conservative default if absent
 
             // ROE: Yahoo's financialData.returnOnEquity is often absent for Indian stocks.
             // Fallback: approximate from trailingEps / bookValue (both per-share).
