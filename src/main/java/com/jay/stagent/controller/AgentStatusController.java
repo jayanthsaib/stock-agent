@@ -14,6 +14,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -150,13 +151,15 @@ public class AgentStatusController {
         List<String> watchlist = config.watchlist();
         long startMs = System.currentTimeMillis();
 
-        // Sequential — Angel One session refresh is not thread-safe; concurrent
-        // re-auth attempts corrupt the token and cause all but the first few
-        // stocks to fail. Single-threaded guarantees a clean session handoff.
-        List<StockAnalysisResult> results = watchlist.stream()
-            .map(stockAnalysisService::analyse)
-            .sorted(Comparator.comparingDouble(StockAnalysisResult::getCompositeScore).reversed())
-            .collect(Collectors.toList());
+        // Sequential with 400 ms gap — Angel One's historical-data API rate-limits
+        // after ~4 back-to-back calls with no pause. The gap adds ~8 s overhead
+        // for a 20-stock watchlist but keeps all calls within the allowed rate.
+        List<StockAnalysisResult> results = new ArrayList<>();
+        for (String symbol : watchlist) {
+            results.add(stockAnalysisService.analyse(symbol));
+            try { Thread.sleep(400); } catch (InterruptedException e) { Thread.currentThread().interrupt(); break; }
+        }
+        results.sort(Comparator.comparingDouble(StockAnalysisResult::getCompositeScore).reversed());
 
         long elapsedSec = (System.currentTimeMillis() - startMs) / 1000;
         double notifyThreshold = config.signal().getMinConfidenceToNotify();
