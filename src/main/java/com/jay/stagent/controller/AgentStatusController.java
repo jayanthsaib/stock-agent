@@ -17,8 +17,6 @@ import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
 /**
@@ -152,18 +150,13 @@ public class AgentStatusController {
         List<String> watchlist = config.watchlist();
         long startMs = System.currentTimeMillis();
 
-        // Limit to 4 concurrent requests — Angel One rate-limits beyond this.
-        List<StockAnalysisResult> results;
-        try (var executor = Executors.newFixedThreadPool(4)) {
-            List<CompletableFuture<StockAnalysisResult>> futures = watchlist.stream()
-                .map(symbol -> CompletableFuture.supplyAsync(
-                    () -> stockAnalysisService.analyse(symbol), executor))
-                .toList();
-            results = futures.stream()
-                .map(CompletableFuture::join)
-                .sorted(Comparator.comparingDouble(StockAnalysisResult::getCompositeScore).reversed())
-                .collect(Collectors.toList());
-        }
+        // Sequential — Angel One session refresh is not thread-safe; concurrent
+        // re-auth attempts corrupt the token and cause all but the first few
+        // stocks to fail. Single-threaded guarantees a clean session handoff.
+        List<StockAnalysisResult> results = watchlist.stream()
+            .map(stockAnalysisService::analyse)
+            .sorted(Comparator.comparingDouble(StockAnalysisResult::getCompositeScore).reversed())
+            .collect(Collectors.toList());
 
         long elapsedSec = (System.currentTimeMillis() - startMs) / 1000;
         double notifyThreshold = config.signal().getMinConfidenceToNotify();
