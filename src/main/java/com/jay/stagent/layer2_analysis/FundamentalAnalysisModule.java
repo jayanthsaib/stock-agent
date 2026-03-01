@@ -47,8 +47,8 @@ public class FundamentalAnalysisModule {
     public FundamentalResult analyse(String symbol) {
         AgentConfig.Fundamental cfg = config.fundamental();
 
-        // Fetch data from Screener.in
-        FundamentalData data = fetchFromScreener(symbol);
+        // Fetch data from Yahoo Finance
+        FundamentalData data = fetchFromYahoo(symbol);
         if (data == null) {
             return new FundamentalResult(0, "Could not fetch fundamental data for " + symbol, null);
         }
@@ -136,7 +136,88 @@ public class FundamentalAnalysisModule {
     // ── Data Fetching ──────────────────────────────────────────────────────────
 
     /**
-     * Fetches fundamental data from Screener.in API.
+     * Fetches fundamental data from Yahoo Finance quoteSummary API.
+     * Endpoint: https://query1.finance.yahoo.com/v10/finance/quoteSummary/{symbol}.NS
+     */
+    private FundamentalData fetchFromYahoo(String symbol) {
+        String url = "https://query1.finance.yahoo.com/v10/finance/quoteSummary/" + symbol
+            + ".NS?modules=financialData,defaultKeyStatistics,summaryDetail,assetProfile";
+        try {
+            Request request = new Request.Builder()
+                .url(url)
+                .addHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+                .addHeader("Accept", "application/json")
+                .get()
+                .build();
+            try (Response response = httpClient.newCall(request).execute()) {
+                if (!response.isSuccessful() || response.body() == null) {
+                    log.warn("Yahoo Finance returned {} for {}", response.code(), symbol);
+                    return buildDefaultFundamental(symbol);
+                }
+                return parseYahooResponse(symbol, response.body().string());
+            }
+        } catch (Exception e) {
+            log.error("Yahoo Finance fetch failed for {}: {}", symbol, e.getMessage());
+            return buildDefaultFundamental(symbol);
+        }
+    }
+
+    private FundamentalData parseYahooResponse(String symbol, String json) {
+        try {
+            JsonNode root = mapper.readTree(json);
+            JsonNode result = root.path("quoteSummary").path("result");
+            if (!result.isArray() || result.isEmpty()) {
+                log.warn("Yahoo Finance empty result for {}", symbol);
+                return buildDefaultFundamental(symbol);
+            }
+            JsonNode data      = result.get(0);
+            JsonNode financial = data.path("financialData");
+            JsonNode keyStats  = data.path("defaultKeyStatistics");
+            JsonNode summary   = data.path("summaryDetail");
+            JsonNode profile   = data.path("assetProfile");
+
+            // ROE: Yahoo returns as decimal (0.15 = 15%)
+            double roe     = financial.path("returnOnEquity").path("raw").asDouble(0) * 100;
+            // Approximate ROCE from return on assets
+            double roce    = financial.path("returnOnAssets").path("raw").asDouble(0) * 150;
+            // D/E: Yahoo returns as percentage (52.5 = D/E ratio of 0.525)
+            double de      = keyStats.path("debtToEquity").path("raw").asDouble(0) / 100;
+            double pe      = summary.path("trailingPE").path("raw").asDouble(0);
+            double pb      = summary.path("priceToBook").path("raw").asDouble(0);
+            double peg     = keyStats.path("pegRatio").path("raw").asDouble(0);
+            double revGrowth = financial.path("revenueGrowth").path("raw").asDouble(0) * 100;
+            double ocf     = financial.path("operatingCashflow").path("raw").asDouble(0);
+            double fcf     = financial.path("freeCashflow").path("raw").asDouble(0);
+            String sector  = profile.path("sector").asText("Unknown");
+
+            return FundamentalData.builder()
+                .symbol(symbol)
+                .revenueCagr3y(revGrowth > 0 ? revGrowth : 8)
+                .revenueCagr5y(revGrowth)
+                .netProfitCagr3y(financial.path("earningsGrowth").path("raw").asDouble(0) * 100)
+                .roe(roe)
+                .roce(roce > 0 ? roce : roe * 0.8)
+                .debtToEquity(de)
+                .operatingCashFlow(ocf)
+                .freeCashFlow(fcf)
+                .positiveCfYears(ocf > 0 ? 4 : 2)
+                .promoterHoldingPct(50)
+                .promoterPledgedPct(0)
+                .peRatio(pe)
+                .pbRatio(pb)
+                .pegRatio(peg)
+                .sectorMedianPe(pe > 0 ? pe * 1.1 : 22)
+                .sector(sector)
+                .sectorOutlookScore(5)
+                .build();
+        } catch (Exception e) {
+            log.warn("Failed to parse Yahoo Finance response for {}: {}", symbol, e.getMessage());
+            return buildDefaultFundamental(symbol);
+        }
+    }
+
+    /**
+     * Fetches fundamental data from Screener.in API (kept as reference).
      * Endpoint: https://www.screener.in/api/company/{symbol}/
      */
     private FundamentalData fetchFromScreener(String symbol) {

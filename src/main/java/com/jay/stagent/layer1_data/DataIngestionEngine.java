@@ -10,11 +10,16 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.*;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
 
 /**
  * Layer 1 — Data Ingestion Engine.
@@ -51,6 +56,12 @@ public class DataIngestionEngine {
     private final List<String> analysisUniverse = new CopyOnWriteArrayList<>();
 
     private static final int QUOTE_BATCH_SIZE = 250; // Angel One getQuote() limit
+
+    private final OkHttpClient yahooClient = new OkHttpClient.Builder()
+        .connectTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(15, TimeUnit.SECONDS)
+        .build();
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     // ── Public API ─────────────────────────────────────────────────────────────
 
@@ -323,14 +334,51 @@ public class DataIngestionEngine {
 
     // ── Macro Data ─────────────────────────────────────────────────────────────
 
+    private List<OHLCVBar> fetchNiftyFromYahoo() {
+        String url = "https://query1.finance.yahoo.com/v8/finance/chart/%5ENSEI?interval=1d&range=1y";
+        try {
+            Request request = new Request.Builder()
+                .url(url)
+                .addHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+                .addHeader("Accept", "application/json")
+                .get()
+                .build();
+            try (Response response = yahooClient.newCall(request).execute()) {
+                if (!response.isSuccessful() || response.body() == null) {
+                    log.warn("Yahoo Finance Nifty fetch failed: HTTP {}", response.code());
+                    return List.of();
+                }
+                JsonNode root = objectMapper.readTree(response.body().string());
+                JsonNode result = root.path("chart").path("result");
+                if (!result.isArray() || result.isEmpty()) {
+                    log.warn("Yahoo Finance Nifty: empty result");
+                    return List.of();
+                }
+                JsonNode timestamps = result.get(0).path("timestamp");
+                JsonNode closes = result.get(0).path("indicators").path("quote").get(0).path("close");
+                List<OHLCVBar> bars = new ArrayList<>();
+                for (int i = 0; i < timestamps.size(); i++) {
+                    if (i >= closes.size() || closes.get(i).isNull()) continue;
+                    double close = closes.get(i).asDouble(0);
+                    if (close <= 0) continue;
+                    LocalDateTime ts = LocalDateTime.ofInstant(
+                        Instant.ofEpochSecond(timestamps.get(i).asLong()), ZoneOffset.UTC);
+                    bars.add(OHLCVBar.builder()
+                        .timestamp(ts).open(close).high(close).low(close).close(close).volume(0)
+                        .build());
+                }
+                log.info("Yahoo Finance Nifty: fetched {} bars", bars.size());
+                return bars;
+            }
+        } catch (Exception e) {
+            log.error("Yahoo Finance Nifty fetch failed: {}", e.getMessage());
+            return List.of();
+        }
+    }
+
     private void refreshMacroData() {
         try {
-            String today      = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
-            String oneYearAgo = LocalDateTime.now().minusYears(1)
-                .format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
-
-            List<OHLCVBar> niftyBars = angelOneClient.getHistoricalData(
-                "26000", "NSE", "ONE_DAY", oneYearAgo, today);
+            List<OHLCVBar> niftyBars = fetchNiftyFromYahoo();
 
             double niftyPrice  = 0;
             double nifty200dma = 0;
