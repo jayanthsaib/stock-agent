@@ -64,6 +64,22 @@ public class TradingScheduler {
     public void marketOpenAnalysis() {
         log.info("=== MARKET OPEN (09:15) — Running analysis pipeline ===");
         try {
+            // Wait for pre-market refresh to finish if it is still running
+            // (can happen if Phase 2 OHLCV fetch takes > 30 minutes or was triggered manually)
+            if (dataIngestionEngine.isRefreshInProgress()) {
+                log.warn("Data refresh still in progress at 09:15 — waiting up to 10 minutes");
+                long deadline = System.currentTimeMillis() + 10 * 60_000L;
+                while (dataIngestionEngine.isRefreshInProgress()
+                        && System.currentTimeMillis() < deadline) {
+                    Thread.sleep(15_000);
+                }
+                if (dataIngestionEngine.isRefreshInProgress()) {
+                    log.error("Data refresh did not finish in time — proceeding with partial universe");
+                    telegramService.sendAlert("⚠️ PARTIAL DATA WARNING",
+                        "Pre-market refresh was still running at 09:15. Signals may be based on an incomplete universe.");
+                }
+            }
+
             // Fetch open positions for risk validation
             List<TradeRecord> openPositions = tradeRepo.findByStatus("EXECUTED");
 

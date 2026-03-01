@@ -57,6 +57,9 @@ public class DataIngestionEngine {
     // Ordered list of symbols that were analysed in the last refresh cycle
     private final List<String> analysisUniverse = new CopyOnWriteArrayList<>();
 
+    // Set to true while refreshAll() is running — read by TradingScheduler at 09:15
+    private volatile boolean refreshInProgress = false;
+
     private static final int QUOTE_BATCH_SIZE = 50; // Angel One market/v1/quote hard limit
 
     private final OkHttpClient yahooClient = new OkHttpClient.Builder()
@@ -67,17 +70,27 @@ public class DataIngestionEngine {
 
     // ── Public API ─────────────────────────────────────────────────────────────
 
+    /** Returns true while refreshAll() is still running (Phase 1 + Phase 2). */
+    public boolean isRefreshInProgress() {
+        return refreshInProgress;
+    }
+
     /**
      * Refreshes all market data using the two-phase approach.
      * Called by TradingScheduler at pre-market and market open.
      */
     public void refreshAll() {
-        log.info("DataIngestionEngine: starting full data refresh");
-        portfolioValueService.refresh();
-        refreshHistoricalData();
-        refreshMacroData();
-        lastCacheRefresh = LocalDateTime.now();
-        log.info("DataIngestionEngine: refresh complete. {} symbols cached", stockDataCache.size());
+        refreshInProgress = true;
+        try {
+            log.info("DataIngestionEngine: starting full data refresh");
+            portfolioValueService.refresh();
+            refreshHistoricalData();
+            refreshMacroData();
+            lastCacheRefresh = LocalDateTime.now();
+            log.info("DataIngestionEngine: refresh complete. {} symbols cached", stockDataCache.size());
+        } finally {
+            refreshInProgress = false;
+        }
     }
 
     /**

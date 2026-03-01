@@ -6,6 +6,7 @@ After=network.target
 User=ubuntu
 WorkingDirectory=/home/ubuntu/stock-agent
 EnvironmentFile=/home/ubuntu/stock-agent/.env
+Environment=TZ=Asia/Kolkata
 ExecStart=/usr/bin/java -Xms128m -Xmx512m -jar /home/ubuntu/stock-agent/target/stock-agent-1.0-SNAPSHOT.jar
 Restart=always
 RestartSec=15

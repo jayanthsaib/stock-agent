@@ -1,8 +1,10 @@
 package com.jay.stagent.layer7_monitor;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.jay.stagent.config.AgentConfig;
 import com.jay.stagent.entity.TradeRecord;
 import com.jay.stagent.layer1_data.AngelOneClient;
+import com.jay.stagent.layer1_data.InstrumentMasterService;
 import com.jay.stagent.layer6_execution.ExecutionEngine;
 import com.jay.stagent.notification.TelegramService;
 import com.jay.stagent.repository.TradeRecordRepository;
@@ -30,6 +32,7 @@ import java.util.List;
 public class PortfolioMonitor {
 
     private final AngelOneClient angelOneClient;
+    private final InstrumentMasterService instrumentMaster;
     private final TradeRecordRepository tradeRepo;
     private final ExecutionEngine executionEngine;
     private final TelegramService telegramService;
@@ -196,16 +199,26 @@ public class PortfolioMonitor {
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private double fetchCurrentPrice(String symbol) {
-        // In production: use DataIngestionEngine live quote
-        // Temporary: uses last cached price via Angel One
+        // Resolve token and fetch live LTP via getQuote — prefer NSE, fall back to BSE
         try {
-            var holding = angelOneClient.getHoldings();
-            for (var h : holding) {
-                if (symbol.equals(h.path("tradingsymbol").asText())) {
-                    return h.path("ltp").asDouble(0);
-                }
+            String token = instrumentMaster.resolveToken(symbol, "NSE");
+            String exchange = "NSE";
+            if (token == null) {
+                token = instrumentMaster.resolveToken(symbol, "BSE");
+                exchange = "BSE";
             }
-        } catch (Exception ignored) {}
+            if (token == null) {
+                log.warn("No instrument token for {} — cannot fetch live price", symbol);
+                return 0;
+            }
+            JsonNode data = angelOneClient.getQuote(exchange, List.of(token));
+            JsonNode fetched = data.path("fetched");
+            if (fetched.isArray() && !fetched.isEmpty()) {
+                return fetched.get(0).path("ltp").asDouble(0);
+            }
+        } catch (Exception e) {
+            log.warn("Could not fetch live price for {}: {}", symbol, e.getMessage());
+        }
         return 0;
     }
 

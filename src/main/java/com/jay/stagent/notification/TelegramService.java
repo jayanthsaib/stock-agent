@@ -10,6 +10,8 @@ import okhttp3.*;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -30,6 +32,10 @@ public class TelegramService {
 
     private static final String API_BASE = "https://api.telegram.org/bot";
     private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
+    // File used to persist the Telegram update offset across restarts.
+    // Prevents re-processing old APPROVE/REJECT messages after a service restart.
+    private static final Path OFFSET_FILE =
+        Path.of(System.getProperty("user.home"), ".stock-agent-telegram-offset");
 
     private final AgentConfig config;
     private final ObjectMapper mapper = new ObjectMapper();
@@ -47,6 +53,16 @@ public class TelegramService {
             .connectTimeout(10, TimeUnit.SECONDS)
             .readTimeout(35, TimeUnit.SECONDS) // Slightly above Telegram's 30s long-poll
             .build();
+        // Restore the update offset saved by the previous run so we don't replay
+        // APPROVE/REJECT messages that were already processed before the restart.
+        try {
+            if (Files.exists(OFFSET_FILE)) {
+                lastUpdateId = Long.parseLong(Files.readString(OFFSET_FILE).trim());
+                log.info("TelegramService: restored update offset {} from disk", lastUpdateId);
+            }
+        } catch (Exception e) {
+            log.warn("TelegramService: could not read offset file ({}), starting from 0", e.getMessage());
+        }
         log.info("TelegramService initialized. Bot configured: {}",
             !config.telegram().getBotToken().isBlank() &&
             !config.telegram().getBotToken().equals("YOUR_BOT_TOKEN"));
@@ -133,9 +149,10 @@ public class TelegramService {
                 if (!root.path("ok").asBoolean()) return;
 
                 JsonNode updates = root.path("result");
+                long highestId = lastUpdateId;
                 for (JsonNode update : updates) {
                     long updateId = update.path("update_id").asLong();
-                    if (updateId > lastUpdateId) lastUpdateId = updateId;
+                    if (updateId > highestId) highestId = updateId;
 
                     JsonNode msg = update.path("message");
                     if (msg.isMissingNode()) continue;
@@ -151,6 +168,15 @@ public class TelegramService {
                             try { h.accept(telegramMsg); }
                             catch (Exception e) { log.error("Message handler error: {}", e.getMessage()); }
                         });
+                    }
+                }
+                // Persist the highest seen update_id so restarts don't replay old messages
+                if (highestId > lastUpdateId) {
+                    lastUpdateId = highestId;
+                    try {
+                        Files.writeString(OFFSET_FILE, String.valueOf(lastUpdateId));
+                    } catch (Exception e) {
+                        log.warn("TelegramService: could not persist offset: {}", e.getMessage());
                     }
                 }
             }
