@@ -216,50 +216,60 @@ public class FundamentalAnalysisModule {
 
     private FundamentalData doYahooFetch(String symbol, boolean isRetry) {
         try {
-            String encodedCrumb = URLEncoder.encode(yahooCrumb, StandardCharsets.UTF_8);
-            String url = "https://query2.finance.yahoo.com/v10/finance/quoteSummary/" + symbol
-                + ".NS?modules=financialData,defaultKeyStatistics,summaryDetail,assetProfile"
-                + "&crumb=" + encodedCrumb;
-            Request request = new Request.Builder()
-                .url(url)
-                .addHeader("User-Agent",
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
-                .addHeader("Accept", "application/json")
-                .get().build();
-            try (Response response = httpClient.newCall(request).execute()) {
-                if (response.code() == 401 && !isRetry) {
-                    log.warn("Yahoo Finance 401 for {} — refreshing crumb and retrying", symbol);
-                    yahooCrumb = null;
-                    cookieStore.clear();
-                    initYahooCredentials();
-                    if (yahooCrumb == null) return buildDefaultFundamental(symbol);
-                    return doYahooFetch(symbol, true);
-                }
-                if (!response.isSuccessful() || response.body() == null) {
-                    log.warn("Yahoo Finance returned {} for {}", response.code(), symbol);
-                    return buildDefaultFundamental(symbol);
-                }
-                return parseYahooResponse(symbol, response.body().string());
+            String crumb = URLEncoder.encode(yahooCrumb, StandardCharsets.UTF_8);
+
+            // Split into two 2-module calls. A single 4-module request causes Yahoo
+            // to silently omit debtToEquity and other fields in defaultKeyStatistics.
+            JsonNode finNode = callQuoteSummary(symbol, "financialData,defaultKeyStatistics", crumb);
+            if (finNode == null && !isRetry) {
+                log.warn("Yahoo Finance error for {} — refreshing crumb and retrying", symbol);
+                yahooCrumb = null;
+                cookieStore.clear();
+                initYahooCredentials();
+                if (yahooCrumb == null) return buildDefaultFundamental(symbol);
+                return doYahooFetch(symbol, true);
             }
+            if (finNode == null) return buildDefaultFundamental(symbol);
+
+            JsonNode valNode = callQuoteSummary(symbol, "summaryDetail,assetProfile", crumb);
+            return parseYahooResponse(symbol, finNode, valNode != null ? valNode : mapper.createObjectNode());
         } catch (Exception e) {
             log.error("Yahoo Finance fetch failed for {}: {}", symbol, e.getMessage());
             return buildDefaultFundamental(symbol);
         }
     }
 
-    private FundamentalData parseYahooResponse(String symbol, String json) {
+    /** Makes one quoteSummary call and returns the first result node, or null on failure. */
+    private JsonNode callQuoteSummary(String symbol, String modules, String encodedCrumb) {
+        String url = "https://query2.finance.yahoo.com/v10/finance/quoteSummary/" + symbol
+            + ".NS?modules=" + modules + "&crumb=" + encodedCrumb;
         try {
-            JsonNode root = mapper.readTree(json);
-            JsonNode result = root.path("quoteSummary").path("result");
-            if (!result.isArray() || result.isEmpty()) {
-                log.warn("Yahoo Finance empty result for {}", symbol);
-                return buildDefaultFundamental(symbol);
+            Request request = new Request.Builder()
+                .url(url)
+                .addHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+                .addHeader("Accept", "application/json")
+                .get().build();
+            try (Response response = httpClient.newCall(request).execute()) {
+                if (!response.isSuccessful() || response.body() == null) {
+                    log.warn("Yahoo Finance [{}] returned {} for {}", modules, response.code(), symbol);
+                    return null;
+                }
+                JsonNode root = mapper.readTree(response.body().string());
+                JsonNode result = root.path("quoteSummary").path("result");
+                return (result.isArray() && !result.isEmpty()) ? result.get(0) : null;
             }
-            JsonNode data      = result.get(0);
-            JsonNode financial = data.path("financialData");
-            JsonNode keyStats  = data.path("defaultKeyStatistics");
-            JsonNode summary   = data.path("summaryDetail");
-            JsonNode profile   = data.path("assetProfile");
+        } catch (Exception e) {
+            log.warn("Yahoo Finance [{}] call failed for {}: {}", modules, symbol, e.getMessage());
+            return null;
+        }
+    }
+
+    private FundamentalData parseYahooResponse(String symbol, JsonNode finNode, JsonNode valNode) {
+        try {
+            JsonNode financial = finNode.path("financialData");
+            JsonNode keyStats  = finNode.path("defaultKeyStatistics");
+            JsonNode summary   = valNode.path("summaryDetail");
+            JsonNode profile   = valNode.path("assetProfile");
 
             // D/E: Yahoo stores as percentage (35.651 → D/E ratio of 0.356).
             // Use -1 as sentinel to detect a genuinely missing field vs a zero value.
