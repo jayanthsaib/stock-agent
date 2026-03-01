@@ -3,10 +3,13 @@ package com.jay.stagent.controller;
 import com.jay.stagent.config.AgentConfig;
 import com.jay.stagent.entity.TradeRecord;
 import com.jay.stagent.layer1_data.AngelOneClient;
+import com.jay.stagent.layer1_data.DataIngestionEngine;
+import com.jay.stagent.layer3_signal.SignalGenerator;
 import com.jay.stagent.layer3_signal.StockAnalysisService;
 import com.jay.stagent.layer6_execution.ApprovalGateway;
 import com.jay.stagent.layer7_monitor.LearningEngine;
 import com.jay.stagent.model.StockAnalysisResult;
+import com.jay.stagent.model.TradeSignal;
 import com.jay.stagent.notification.TelegramService;
 import com.jay.stagent.repository.TradeRecordRepository;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +21,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 /**
@@ -45,6 +49,8 @@ public class AgentStatusController {
     private final LearningEngine learningEngine;
     private final TelegramService telegramService;
     private final StockAnalysisService stockAnalysisService;
+    private final DataIngestionEngine dataIngestionEngine;
+    private final SignalGenerator signalGenerator;
 
     // ── GET /api/status ────────────────────────────────────────────────────────
 
@@ -177,6 +183,42 @@ public class AgentStatusController {
             "notifyThreshold", notifyThreshold,
             "alerts", alerts,
             "results", results
+        ));
+    }
+
+    // ── POST /api/refresh ──────────────────────────────────────────────────────
+    // Kicks off the full NSE universe refresh in a background thread and returns
+    // immediately.  Phase 1 filters all NSE stocks by price/volume; Phase 2
+    // fetches 1-year OHLCV history for up to 500 candidates.
+    // Typical runtime: 5–15 minutes.  Watch logs for progress.
+
+    @PostMapping("/refresh")
+    public ResponseEntity<Map<String, Object>> refreshUniverse() {
+        CompletableFuture.runAsync(dataIngestionEngine::refreshAll);
+        return ResponseEntity.ok(Map.of(
+            "started", true,
+            "startedAt", LocalDateTime.now().toString(),
+            "message", "Full NSE universe refresh started in background. "
+                + "Phase 1 filters all NSE stocks; Phase 2 fetches OHLCV for up to 500 candidates. "
+                + "Check logs for progress, then call POST /api/signals when done."
+        ));
+    }
+
+    // ── POST /api/signals ──────────────────────────────────────────────────────
+    // Runs generateSignals() across the full cached equity universe (populated by
+    // POST /api/refresh or the 8:45 AM scheduled refresh) and returns every
+    // signal that passes the minimum confidence threshold.
+
+    @PostMapping("/signals")
+    public ResponseEntity<Map<String, Object>> generateSignals() {
+        long startMs = System.currentTimeMillis();
+        List<TradeSignal> signals = signalGenerator.generateSignals();
+        long elapsedSec = (System.currentTimeMillis() - startMs) / 1000;
+        return ResponseEntity.ok(Map.of(
+            "generatedAt", LocalDateTime.now().toString(),
+            "elapsedSeconds", elapsedSec,
+            "signalCount", signals.size(),
+            "signals", signals
         ));
     }
 }
