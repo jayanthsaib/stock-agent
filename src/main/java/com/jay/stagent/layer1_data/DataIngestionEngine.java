@@ -193,15 +193,25 @@ public class DataIngestionEngine {
                 tokenToSymbol.put(token, sym);
             }
         }
+        log.info("Phase 1 {}: resolved {} tokens from {} symbols", exchange, tokenList.size(), symbols.size());
 
         // Batch into groups of QUOTE_BATCH_SIZE
         for (int i = 0; i < tokenList.size(); i += QUOTE_BATCH_SIZE) {
             List<String> batch = tokenList.subList(i, Math.min(i + QUOTE_BATCH_SIZE, tokenList.size()));
             try {
                 JsonNode data = angelOneClient.getQuote(exchange, batch);
-                if (data == null || data.isMissingNode()) continue;
+                if (data == null || data.isMissingNode()) {
+                    log.warn("Phase 1 batch {}: data is null/missing", i / QUOTE_BATCH_SIZE + 1);
+                    continue;
+                }
 
-                JsonNode fetched = data.path("fetched");
+                JsonNode fetched   = data.path("fetched");
+                JsonNode unfetched = data.path("unfetched");
+                log.info("Phase 1 batch {}: fetched={} unfetched={}",
+                    i / QUOTE_BATCH_SIZE + 1,
+                    fetched.isArray()   ? fetched.size()   : "N/A(type=" + fetched.getNodeType() + ")",
+                    unfetched.isArray() ? unfetched.size() : "N/A");
+
                 if (fetched.isArray()) {
                     for (JsonNode item : fetched) {
                         String token = item.path("symbolToken").asText("");
