@@ -206,8 +206,10 @@ public class DataIngestionEngine {
                     for (JsonNode item : fetched) {
                         String token   = item.path("symbolToken").asText("");
                         double ltp     = item.path("ltp").asDouble(0);
-                        double tradedVal = item.path("totaltradedvalue").asDouble(0);
-                        double tradedValCr = tradedVal / 10_000_000.0;
+                        // Angel One FULL-mode quote returns tradeVolume (shares), not a value field.
+                        // Compute traded value in Crores as: (shares × LTP) / 1,00,00,000
+                        long tradeVolume = item.path("tradeVolume").asLong(0);
+                        double tradedValCr = (tradeVolume * ltp) / 10_000_000.0;
 
                         String sym = tokenToSymbol.get(token);
                         if (sym == null) continue;
