@@ -11,11 +11,18 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: ${DDL_AUTO:update}
     show-sql: false
     properties:
       hibernate:
         dialect: ${DB_DIALECT:org.hibernate.dialect.H2Dialect}
+
+  # ── Flyway (enabled on PostgreSQL server via FLYWAY_ENABLED=true) ──────────
+  flyway:
+    enabled: ${FLYWAY_ENABLED:false}
+    baseline-on-migrate: true
+    baseline-version: 0
+    locations: classpath:db/migration
 
   # ── H2 Console (paper-trading mode only) ──────────────────────────────────
   h2:

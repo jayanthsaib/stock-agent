@@ -71,6 +71,11 @@
             <artifactId>h2</artifactId>
             <scope>runtime</scope>
         </dependency>
+        <!-- Flyway — schema migrations for PostgreSQL (disabled on H2/local dev) -->
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
 
         <!-- ===== HTTP Client (Telegram Bot API + external data APIs) ===== -->
         <dependency>
