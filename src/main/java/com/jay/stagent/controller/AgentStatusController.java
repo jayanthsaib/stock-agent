@@ -5,6 +5,7 @@ import com.jay.stagent.entity.TradeRecord;
 import com.jay.stagent.layer1_data.AngelOneClient;
 import com.jay.stagent.layer1_data.DataIngestionEngine;
 import com.jay.stagent.layer1_data.MarketCalendarService;
+import com.jay.stagent.layer3_signal.BacktestEngine;
 import com.jay.stagent.layer3_signal.SignalGenerator;
 import com.jay.stagent.layer3_signal.StockAnalysisService;
 import com.jay.stagent.layer4_risk.RiskValidator;
@@ -54,6 +55,7 @@ public class AgentStatusController {
     private final DataIngestionEngine dataIngestionEngine;
     private final MarketCalendarService marketCalendar;
     private final SignalGenerator signalGenerator;
+    private final BacktestEngine backtestEngine;
     private final RiskValidator riskValidator;
 
     // ── GET /api/status ────────────────────────────────────────────────────────
@@ -261,6 +263,21 @@ public class AgentStatusController {
             "signalCount", signals.size(),
             "signals", signals
         ));
+    }
+
+    // ── POST /api/backtest ────────────────────────────────────────────────────
+    // Body (optional): {"symbols": ["RELIANCE", "TCS"]}
+    // If symbols is empty/omitted, runs on the full cached universe.
+
+    @PostMapping("/backtest")
+    public ResponseEntity<BacktestEngine.BacktestReport> runBacktest(
+            @RequestBody(required = false) Map<String, Object> body) {
+        @SuppressWarnings("unchecked")
+        List<String> symbols = body != null && body.get("symbols") instanceof List
+            ? (List<String>) body.get("symbols")
+            : List.of();
+        BacktestEngine.BacktestReport report = backtestEngine.run(symbols);
+        return ResponseEntity.ok(report);
     }
 
     // ── GET /api/market/status ────────────────────────────────────────────────

@@ -56,6 +56,7 @@ public class TradingScheduler {
         }
         log.info("=== PRE-MARKET (08:45) — Refreshing data ===");
         try {
+            signalGenerator.resetDailySignals(); // reset per-day dedup before market open
             dataIngestionEngine.refreshAll();
             log.info("Pre-market data refresh complete");
         } catch (Exception e) {
@@ -156,6 +157,35 @@ public class TradingScheduler {
             portfolioMonitor.sendDailySummary();
         } catch (Exception e) {
             log.error("End-of-day summary failed: {}", e.getMessage());
+        }
+    }
+
+    // ── Intraday Signals (every 30 min, 10:00–14:30 IST) ─────────────────────
+    // Refreshes live prices and generates new signals; dedup prevents re-alerting
+    // the same stock that was already signaled at 09:15 or an earlier intraday run.
+
+    @Scheduled(cron = "0 0/30 10-14 * * MON-FRI", zone = "Asia/Kolkata")
+    public void intradaySignals() {
+        if (!marketCalendar.isMarketOpen()) return;
+        log.info("=== INTRADAY SIGNALS ({}) ===",
+            java.time.LocalTime.now(java.time.ZoneId.of("Asia/Kolkata")));
+        try {
+            dataIngestionEngine.refreshLivePrices(); // fast ~1–2 min Phase 1 refresh
+            List<TradeRecord> openPositions = tradeRepo.findByStatus("EXECUTED");
+            List<TradeSignal> signals = signalGenerator.generateSignals();
+
+            int submitted = 0;
+            for (TradeSignal signal : signals) {
+                RiskValidator.ValidationResult validation =
+                    riskValidator.validate(signal, openPositions);
+                if (validation.passed()) {
+                    approvalGateway.submitForApproval(signal, validation);
+                    submitted++;
+                }
+            }
+            log.info("Intraday run: {} new signals submitted to Telegram", submitted);
+        } catch (Exception e) {
+            log.error("Intraday signal generation failed: {}", e.getMessage(), e);
         }
     }
 

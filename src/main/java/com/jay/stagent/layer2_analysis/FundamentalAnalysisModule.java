@@ -36,6 +36,7 @@ import java.util.concurrent.TimeUnit;
 public class FundamentalAnalysisModule {
 
     private final AgentConfig config;
+    private final NewsService newsService;
     // Simple in-memory CookieJar — stores all cookies and matches them by URL
     // using OkHttp's own Cookie.matches(), equivalent to curl -c/-b.
     private final List<Cookie> cookieStore = new CopyOnWriteArrayList<>();
@@ -149,8 +150,15 @@ public class FundamentalAnalysisModule {
         // ── Sector Outlook (max 10 pts) ───────────────────────────────────────
         score += data.getSectorOutlookScore();
 
+        // ── News Sentiment (±5 pts adjustment) ───────────────────────────────
+        // Fetches recent headlines from Yahoo Finance and adjusts score slightly
+        // to reflect near-term market news. Does not override fundamentals.
+        double sentiment = newsService.getSentimentScore(symbol);
+        if (sentiment > 65)      { score += 5; summary.append(" News: positive."); }
+        else if (sentiment < 35) { score -= 5; summary.append(" News: negative."); }
+
         score = Math.max(0, Math.min(100, score));
-        log.debug("Fundamental score for {}: {:.1f}", symbol, score);
+        log.debug("Fundamental score for {}: {:.1f} (sentiment={})", symbol, score, sentiment);
 
         return new FundamentalResult(score, summary.toString().trim(), data);
     }

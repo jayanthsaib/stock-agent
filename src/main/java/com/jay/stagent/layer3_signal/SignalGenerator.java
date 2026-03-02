@@ -13,10 +13,13 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -41,9 +44,22 @@ public class SignalGenerator {
 
     private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
 
+    // Tracks which symbols already received a Telegram signal today to prevent
+    // duplicate alerts across the 9:15 AM run and intraday 30-min runs.
+    private final Set<String> signaledSymbolsToday = ConcurrentHashMap.newKeySet();
+    private volatile LocalDate signaledDate = LocalDate.now();
+
+    /** Clears the daily dedup set. Called by TradingScheduler at 08:45 pre-market. */
+    public void resetDailySignals() {
+        signaledSymbolsToday.clear();
+        signaledDate = LocalDate.now();
+        log.info("Daily signal deduplication reset for {}", signaledDate);
+    }
+
     /**
      * Runs the full analysis pipeline on all watchlist stocks and returns
      * trade signals that pass the minimum confidence threshold.
+     * Symbols already signaled today are excluded to prevent duplicate Telegram alerts.
      */
     public List<TradeSignal> generateSignals() {
         log.info("SignalGenerator: starting analysis across full equity universe");
@@ -66,11 +82,19 @@ public class SignalGenerator {
                 () -> analyseStock(stockData, macro, macroResult), executor))
             .toList();
 
+        // Reset dedup if date rolled over (safety net for long-running service)
+        if (!LocalDate.now().equals(signaledDate)) resetDailySignals();
+
         for (CompletableFuture<TradeSignal> future : futures) {
             try {
                 TradeSignal signal = future.get();
                 if (signal != null) {
-                    signals.add(signal);
+                    if (signaledSymbolsToday.contains(signal.getSymbol())) {
+                        log.debug("Skipping duplicate signal for {} — already sent today", signal.getSymbol());
+                    } else {
+                        signaledSymbolsToday.add(signal.getSymbol());
+                        signals.add(signal);
+                    }
                 }
             } catch (Exception e) {
                 log.error("Signal generation future failed: {}", e.getMessage());

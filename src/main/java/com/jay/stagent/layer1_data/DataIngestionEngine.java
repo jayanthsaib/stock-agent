@@ -94,6 +94,59 @@ public class DataIngestionEngine {
     }
 
     /**
+     * Fast intraday refresh — updates only the LTP field for every cached symbol
+     * by running Phase 1 batch quotes. Takes ~1 min vs ~15 min for a full refresh.
+     * Called every 30 min by TradingScheduler before intraday signal generation.
+     */
+    public void refreshLivePrices() {
+        if (refreshInProgress) {
+            log.warn("Full refresh in progress — skipping live price update");
+            return;
+        }
+        List<String> symbols = new ArrayList<>(stockDataCache.keySet());
+        if (symbols.isEmpty()) {
+            log.warn("Live price refresh: cache empty, nothing to update");
+            return;
+        }
+        log.info("Refreshing live prices for {} cached symbols", symbols.size());
+        int updated = 0;
+
+        for (int i = 0; i < symbols.size(); i += QUOTE_BATCH_SIZE) {
+            if (i > 0) {
+                try { Thread.sleep(200); } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt(); break;
+                }
+            }
+            List<String> batch = symbols.subList(i, Math.min(i + QUOTE_BATCH_SIZE, symbols.size()));
+            List<String> tokens = new ArrayList<>();
+            Map<String, String> tokenToSym = new LinkedHashMap<>();
+            for (String sym : batch) {
+                String token = instrumentMaster.resolveToken(sym, "NSE");
+                if (token != null) { tokens.add(token); tokenToSym.put(token, sym); }
+            }
+            if (tokens.isEmpty()) continue;
+            try {
+                JsonNode data = angelOneClient.getQuote("NSE", tokens);
+                JsonNode fetched = data.path("fetched");
+                if (fetched.isArray()) {
+                    for (JsonNode item : fetched) {
+                        String tok = item.path("symbolToken").asText();
+                        double ltp = item.path("ltp").asDouble(0);
+                        String sym = tokenToSym.get(tok);
+                        if (sym != null && ltp > 0) {
+                            StockData sd = stockDataCache.get(sym);
+                            if (sd != null) { sd.setLtp(ltp); updated++; }
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("Live price refresh batch {} failed: {}", i / QUOTE_BATCH_SIZE + 1, e.getMessage());
+            }
+        }
+        log.info("Live price refresh complete: {}/{} prices updated", updated, symbols.size());
+    }
+
+    /**
      * Returns cached StockData for a symbol. Fetches live if not cached.
      */
     public StockData getStockData(String symbol) {
