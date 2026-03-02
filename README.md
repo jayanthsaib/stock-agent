@@ -8,6 +8,20 @@ It analyses stocks using fundamental, technical, and macro data — then sends t
 
 ---
 
+## Documentation
+
+Detailed documentation lives in the [`docs/`](docs/) folder:
+
+| Document | Contents |
+|----------|---------|
+| [`docs/ROADMAP.md`](docs/ROADMAP.md) | Full project plan — ★☆ to ★★★★★ maturity tiers with completed / planned status |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | 7-layer architecture, data flow, scheduling timeline, DB schema |
+| [`docs/API.md`](docs/API.md) | Complete REST API reference with request/response examples |
+| [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | AWS EC2 setup, PostgreSQL, systemd service, build & deploy workflow |
+| [`docs/TRADING_STRATEGY.md`](docs/TRADING_STRATEGY.md) | Signal logic, confidence scoring, risk rules, backtesting results, go-live checklist |
+
+---
+
 ## Table of Contents
 
 1. [How It Works](#how-it-works)
@@ -328,33 +342,47 @@ The agent exposes a dashboard API at `http://localhost:8080`:
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET` | `/api/status` | Agent health, mode, open positions count |
+| `GET` | `/api/market/status` | Is market open today? (holiday-aware) |
 | `GET` | `/api/positions` | All open (executed) positions |
 | `GET` | `/api/signals/pending` | Signals waiting for your approval |
 | `GET` | `/api/signals/history?days=30` | Trade history for last N days |
 | `GET` | `/api/performance` | Win rate, P&L, confidence calibration |
 | `GET` | `/api/analyse/{symbol}` | On-demand full analysis for any NSE symbol |
+| `POST` | `/api/scan` | Analyse entire watchlist, sorted by score |
+| `POST` | `/api/refresh` | Refresh NSE universe in background (5–15 min) |
+| `POST` | `/api/signals` | Generate signals on cached universe (no Telegram) |
+| `POST` | `/api/signals/submit` | Full pipeline: generate → risk validate → Telegram |
+| `POST` | `/api/backtest` | Replay strategy on 1-year OHLCV cache |
 | `POST` | `/api/telegram/test` | Test Telegram bot connectivity |
 | `POST` | `/api/broker/login` | Refresh Angel One session |
 
-**Examples:**
+See [`docs/API.md`](docs/API.md) for full request/response examples.
+
+**Quick examples:**
 ```bash
 # Check if everything is running
 curl http://localhost:8080/api/status
 
-# On-demand stock analysis (returns full JSON breakdown)
+# Is market open today?
+curl http://localhost:8080/api/market/status
+
+# On-demand stock analysis
 curl http://localhost:8080/api/analyse/RELIANCE
-curl http://localhost:8080/api/analyse/TCS
 
-# See all open positions
-curl http://localhost:8080/api/positions
+# Refresh universe then generate signals
+curl -X POST http://localhost:8080/api/refresh
+# (wait 5–15 min, watch logs)
+curl -X POST http://localhost:8080/api/signals/submit
 
-# View performance stats
-curl http://localhost:8080/api/performance
+# Run backtest on 5 symbols
+curl -X POST http://localhost:8080/api/backtest \
+  -H "Content-Type: application/json" \
+  -d '{"symbols":["RELIANCE","TCS","INFY","HDFCBANK","LT"]}'
 
-# Test Telegram (sends a test message to your bot)
+# Test Telegram
 curl -X POST http://localhost:8080/api/telegram/test
 
-# Login to Angel One (do this on first run)
+# Login to Angel One
 curl -X POST http://localhost:8080/api/broker/login
 ```
 
@@ -436,33 +464,28 @@ The full dashboard is available at `http://localhost:8080/ui/`:
 
 ## Implementation Phases
 
-Follow these phases — **never skip straight to live trading**:
+The full project roadmap follows a **★-rating maturity model** — see [`docs/ROADMAP.md`](docs/ROADMAP.md)
+for the complete plan with completion status for each feature.
 
-### Phase 1 — Paper Trading (Weeks 1–4) ← You are here
-- `paper_trading.enabled: true` in config.yaml
-- Agent generates signals and sends reports to Telegram
-- You reply APPROVE/REJECT as if it were real
-- No real orders are placed
-- **Goal:** Validate that signals make sense. Track would-be P&L manually.
+### Current Status: ★★★★☆ (Smart)
 
-### Phase 2 — Manual Approval, Real Money (Weeks 5–8)
-- Set `paper_trading.enabled: false`
-- Set `auto_mode: false` (keep this — every trade needs your approval)
-- Connect with real Angel One credentials
-- Start with **small capital** (e.g. ₹50,000)
-- **Goal:** Build confidence that the system executes correctly.
+All features through the ★★★★☆ tier are implemented and running in production:
+- ✅ ★☆ — Skeleton (Angel One, Telegram, paper trading)
+- ✅ ★★ — Reliable (7-layer architecture, full NSE scan, 15+ risk rules)
+- ✅ ★★★ — Production-grade (AWS EC2, PostgreSQL, systemd, auto-login)
+- ✅ ★★★★ — Smart (market calendar, intraday signals, news sentiment, backtesting)
+- 🔲 ★★★★★ — Full system (HTTPS, API auth, advanced learning — planned)
 
-### Phase 3 — Semi-Auto Mode (Months 3–4)
-- Set `auto_execute_threshold: 90` in config.yaml
-- Set `auto_mode: true`
-- Only signals with 90%+ confidence auto-execute (small positions)
-- All others still require manual approval
-- **Goal:** Validate auto-execution on high-conviction signals only.
+### Go-Live Trading Phases
 
-### Phase 4 — Full Operation (Month 5+)
-- Adjust thresholds based on 3+ months of live performance data
-- Scale capital gradually
-- Review monthly learning reports to tune weights
+| Phase | When | Capital | Mode |
+|-------|------|---------|------|
+| 1 — Paper | Weeks 1–4 | Virtual | `paper_trading: true`, `auto_mode: false` |
+| 2 — Live Manual | Weeks 5–8 | ₹25–50K | `paper_trading: false`, `auto_mode: false` |
+| 3 — Semi-Auto | Months 3–4 | ₹1L | `auto_execute_threshold: 90`, `auto_mode: true` |
+| 4 — Full | Month 5+ | Scale up | Tune thresholds from performance data |
+
+See [`docs/TRADING_STRATEGY.md`](docs/TRADING_STRATEGY.md) for the full go-live checklist.
 
 ---
 
@@ -472,6 +495,12 @@ Follow these phases — **never skip straight to live trading**:
 stock-agent/
 ├── pom.xml                          # Maven dependencies
 ├── .env.example                     # Credential template — copy to .env
+├── docs/
+│   ├── ROADMAP.md                   # ★-rating plan — full feature history and future plans
+│   ├── ARCHITECTURE.md              # 7-layer deep-dive, data flow, scheduling, DB schema
+│   ├── API.md                       # Complete REST API reference
+│   ├── DEPLOYMENT.md                # AWS EC2, PostgreSQL, systemd, build & deploy
+│   └── TRADING_STRATEGY.md          # Signal logic, risk rules, backtesting, go-live checklist
 ├── src/main/
 │   ├── java/com/jay/stagent/
 │   │   ├── StockAgentApplication.java       # App entry point
@@ -481,18 +510,21 @@ stock-agent/
 │   │   ├── entity/                          # JPA database entities
 │   │   ├── repository/                      # Spring Data repositories
 │   │   ├── layer1_data/
-│   │   │   ├── AngelOneClient.java          # Angel One REST API client
-│   │   │   ├── DataIngestionEngine.java     # Two-phase universe scan + caching
+│   │   │   ├── AngelOneClient.java          # Angel One REST API client (auto-login on startup)
+│   │   │   ├── DataIngestionEngine.java     # Two-phase scan + refreshLivePrices() for intraday
 │   │   │   ├── InstrumentMasterService.java # Scrip master download + token resolution
+│   │   │   ├── MarketCalendarService.java   # Holiday calendar + market open/closed state
 │   │   │   └── PortfolioValueService.java   # Live wallet fetch (cash + holdings)
 │   │   ├── layer2_analysis/
 │   │   │   ├── TechnicalAnalysisModule.java # DMA, RSI, MACD, Volume (ta4j)
-│   │   │   ├── FundamentalAnalysisModule.java # Screener.in data
+│   │   │   ├── FundamentalAnalysisModule.java # Screener.in + news sentiment overlay
 │   │   │   ├── MacroContextModule.java       # VIX, Nifty, FII
-│   │   │   └── MutualFundAnalysisModule.java # AMFI NAV analysis
+│   │   │   ├── MutualFundAnalysisModule.java # AMFI NAV analysis
+│   │   │   └── NewsService.java              # Yahoo Finance headlines → sentiment score
 │   │   ├── layer3_signal/
-│   │   │   ├── SignalGenerator.java          # Parallel analysis → signal (scheduled)
-│   │   │   └── StockAnalysisService.java     # On-demand single-stock analysis
+│   │   │   ├── SignalGenerator.java          # Parallel analysis → signal (scheduled + intraday)
+│   │   │   ├── StockAnalysisService.java     # On-demand single-stock analysis
+│   │   │   └── BacktestEngine.java           # 1-year OHLCV strategy replay
 │   │   ├── layer4_risk/
 │   │   │   └── RiskValidator.java            # 15+ hard rules
 │   │   ├── layer5_report/
