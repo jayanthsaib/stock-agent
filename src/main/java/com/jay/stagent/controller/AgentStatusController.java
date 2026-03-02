@@ -4,6 +4,7 @@ import com.jay.stagent.config.AgentConfig;
 import com.jay.stagent.entity.TradeRecord;
 import com.jay.stagent.layer1_data.AngelOneClient;
 import com.jay.stagent.layer1_data.DataIngestionEngine;
+import com.jay.stagent.layer1_data.MarketCalendarService;
 import com.jay.stagent.layer3_signal.SignalGenerator;
 import com.jay.stagent.layer3_signal.StockAnalysisService;
 import com.jay.stagent.layer4_risk.RiskValidator;
@@ -51,6 +52,7 @@ public class AgentStatusController {
     private final TelegramService telegramService;
     private final StockAnalysisService stockAnalysisService;
     private final DataIngestionEngine dataIngestionEngine;
+    private final MarketCalendarService marketCalendar;
     private final SignalGenerator signalGenerator;
     private final RiskValidator riskValidator;
 
@@ -258,6 +260,18 @@ public class AgentStatusController {
             "elapsedSeconds", elapsedSec,
             "signalCount", signals.size(),
             "signals", signals
+        ));
+    }
+
+    // ── GET /api/market/status ────────────────────────────────────────────────
+
+    @GetMapping("/market/status")
+    public ResponseEntity<Map<String, Object>> marketStatus() {
+        return ResponseEntity.ok(Map.of(
+            "date", java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata")).toString(),
+            "status", marketCalendar.getMarketStatus(),
+            "isOpen", marketCalendar.isMarketOpen(),
+            "holidays", marketCalendar.getHolidays()
         ));
     }
 }

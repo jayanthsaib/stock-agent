@@ -3,6 +3,7 @@ package com.jay.stagent.scheduler;
 import com.jay.stagent.config.AgentConfig;
 import com.jay.stagent.entity.TradeRecord;
 import com.jay.stagent.layer1_data.DataIngestionEngine;
+import com.jay.stagent.layer1_data.MarketCalendarService;
 import com.jay.stagent.layer3_signal.SignalGenerator;
 import com.jay.stagent.layer4_risk.RiskValidator;
 import com.jay.stagent.layer6_execution.ApprovalGateway;
@@ -35,6 +36,7 @@ import java.util.List;
 public class TradingScheduler {
 
     private final DataIngestionEngine dataIngestionEngine;
+    private final MarketCalendarService marketCalendar;
     private final SignalGenerator signalGenerator;
     private final RiskValidator riskValidator;
     private final ApprovalGateway approvalGateway;
@@ -48,6 +50,10 @@ public class TradingScheduler {
 
     @Scheduled(cron = "0 45 8 * * MON-FRI", zone = "Asia/Kolkata")
     public void preMarket() {
+        if (!marketCalendar.isMarketOpen()) {
+            log.info("PRE-MARKET skipped — market holiday today");
+            return;
+        }
         log.info("=== PRE-MARKET (08:45) — Refreshing data ===");
         try {
             dataIngestionEngine.refreshAll();
@@ -62,6 +68,10 @@ public class TradingScheduler {
 
     @Scheduled(cron = "0 15 9 * * MON-FRI", zone = "Asia/Kolkata")
     public void marketOpenAnalysis() {
+        if (!marketCalendar.isMarketOpen()) {
+            log.info("MARKET OPEN skipped — market holiday today");
+            return;
+        }
         log.info("=== MARKET OPEN (09:15) — Running analysis pipeline ===");
         try {
             // Wait for pre-market refresh to finish if it is still running
@@ -123,6 +133,7 @@ public class TradingScheduler {
 
     @Scheduled(cron = "0 0/15 9-15 * * MON-FRI", zone = "Asia/Kolkata")
     public void intradayMonitor() {
+        if (!marketCalendar.isMarketOpen()) return;
         log.debug("=== INTRADAY MONITOR ===");
         try {
             portfolioMonitor.monitorPositions();
@@ -136,6 +147,10 @@ public class TradingScheduler {
 
     @Scheduled(cron = "0 30 15 * * MON-FRI", zone = "Asia/Kolkata")
     public void endOfDay() {
+        if (!marketCalendar.isMarketOpen()) {
+            log.info("END-OF-DAY skipped — market holiday today");
+            return;
+        }
         log.info("=== END OF DAY (15:30) ===");
         try {
             portfolioMonitor.sendDailySummary();

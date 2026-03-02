@@ -165,8 +165,8 @@ public class DataIngestionEngine {
 
     /**
      * Phase 1: calls getQuote() in batches to quickly filter the universe.
-     * Returns symbols that pass the price and traded-value filters,
-     * plus all watchlist symbols unconditionally.
+     * Returns symbols sorted by LTP descending (largest/most liquid first),
+     * with watchlist stocks always prepended regardless of LTP.
      */
     private List<String> phase1QuoteFilter() {
         List<String> nseSymbols = instrumentMaster.getEquitySymbols("NSE");
@@ -177,25 +177,37 @@ public class DataIngestionEngine {
             nseSymbols.size(), bseSymbols.size());
 
         Set<String> watchlistSet = new HashSet<>(config.watchlist());
-        Set<String> candidates = new LinkedHashSet<>(watchlistSet); // watchlist always included
+        // Map of symbol → LTP for non-watchlist candidates
+        Map<String, Double> candidateLtp = new LinkedHashMap<>();
 
-        double minPrice = config.filters().getMinStockPriceInr();
+        double minPrice   = config.filters().getMinStockPriceInr();
         double minVolumeCr = config.filters().getMinAvgDailyVolumeCr();
 
-        filterExchange(nseSymbols, "NSE", minPrice, minVolumeCr, candidates);
+        filterExchange(nseSymbols, "NSE", minPrice, minVolumeCr, watchlistSet, candidateLtp);
         if (config.filters().isIncludeBse()) {
-            filterExchange(bseSymbols, "BSE", minPrice, minVolumeCr, candidates);
+            filterExchange(bseSymbols, "BSE", minPrice, minVolumeCr, watchlistSet, candidateLtp);
         }
 
-        log.info("Phase 1 complete: {} candidates pass price/volume filter", candidates.size());
-        return new ArrayList<>(candidates);
+        // Sort non-watchlist candidates by LTP descending — higher price is a rough proxy
+        // for market cap, ensuring larger/more liquid stocks fill the Phase 2 slots first.
+        List<String> sorted = candidateLtp.entrySet().stream()
+            .sorted(Map.Entry.<String, Double>comparingByValue().reversed())
+            .map(Map.Entry::getKey)
+            .collect(java.util.stream.Collectors.toList());
+
+        // Watchlist always comes first (unconditionally included)
+        List<String> result = new ArrayList<>(config.watchlist());
+        sorted.stream().filter(s -> !watchlistSet.contains(s)).forEach(result::add);
+
+        log.info("Phase 1 complete: {} candidates (watchlist={}, others sorted by LTP desc)",
+            result.size(), watchlistSet.size());
+        return result;
     }
 
     private void filterExchange(List<String> symbols, String exchange,
                                  double minPrice, double minVolumeCr,
-                                 Set<String> candidates) {
-        Set<String> watchlistSet = new HashSet<>(config.watchlist());
-
+                                 Set<String> watchlistSet,
+                                 Map<String, Double> candidateLtp) {
         // Build token→symbol reverse map for this batch
         List<String> tokenList = new ArrayList<>();
         Map<String, String> tokenToSymbol = new LinkedHashMap<>();
@@ -236,15 +248,14 @@ public class DataIngestionEngine {
                         String sym = tokenToSymbol.get(token);
                         if (sym == null) continue;
 
-                        // Watchlist always added (already in candidates)
+                        // Watchlist handled separately — skip here
                         if (watchlistSet.contains(sym)) continue;
 
                         // Phase 1: price filter only — volume is verified precisely in
                         // Phase 2 using the 20-day average from historical OHLCV data.
-                        // (tradeVolume from the live quote API is 0 outside market hours,
-                        //  so a volume filter here would eliminate everything after close.)
+                        // (tradeVolume from the live quote API is 0 outside market hours)
                         if (ltp >= minPrice) {
-                            candidates.add(sym);
+                            candidateLtp.put(sym, ltp);
                         }
                     }
                 }

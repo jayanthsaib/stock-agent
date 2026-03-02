@@ -55,6 +55,7 @@ public class AgentConfig {
     private Telegram telegram = new Telegram();
     private PaperTrading paperTrading = new PaperTrading();
     private List<String> watchlist = List.of();
+    private List<String> marketHolidays = List.of();
 
     @PostConstruct
     public void load() {
@@ -92,6 +93,7 @@ public class AgentConfig {
             this.telegram.setBotToken(resolve(this.telegram.getBotToken()));
             this.telegram.setChatId(resolve(this.telegram.getChatId()));
             this.watchlist       = root.getWatchlist() != null ? root.getWatchlist() : List.of();
+            this.marketHolidays  = root.getMarketHolidays() != null ? root.getMarketHolidays() : List.of();
             log.info("AgentConfig loaded from '{}'. Paper-trading mode: {}", configFile, paperTrading.isEnabled());
         } catch (Exception e) {
             log.error("Failed to load config.yaml — agent will use defaults: {}", e.getMessage());
@@ -113,6 +115,7 @@ public class AgentConfig {
     public Telegram telegram()             { return telegram; }
     public PaperTrading paperTrading()     { return paperTrading; }
     public List<String> watchlist()        { return watchlist; }
+    public List<String> marketHolidays()   { return marketHolidays; }
 
     // ── Config POJOs ──────────────────────────────────────────────────────────
 
@@ -131,6 +134,7 @@ public class AgentConfig {
         private Telegram telegram = new Telegram();
         private PaperTrading paperTrading = new PaperTrading();
         private List<String> watchlist;
+        private List<String> marketHolidays;
     }
 
     @Data public static class Portfolio {
