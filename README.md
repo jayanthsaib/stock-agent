@@ -14,6 +14,7 @@ Detailed documentation lives in the [`docs/`](docs/) folder:
 
 | Document | Contents |
 |----------|---------|
+| [`docs/HOW_IT_WORKS.md`](docs/HOW_IT_WORKS.md) | Complete end-to-end flow — every scheduled job, the full signal pipeline, Telegram interaction, infrastructure |
 | [`docs/ROADMAP.md`](docs/ROADMAP.md) | Full project plan — ★☆ to ★★★★★ maturity tiers with completed / planned status |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | 7-layer architecture, data flow, scheduling timeline, DB schema |
 | [`docs/API.md`](docs/API.md) | Complete REST API reference with request/response examples |
