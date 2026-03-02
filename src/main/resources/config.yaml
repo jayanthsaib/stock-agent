@@ -26,7 +26,7 @@ risk:
   min_risk_reward_ratio: 2.0          # Minimum R:R for any trade signal
   trailing_stop_activate_pct: 10      # Activate trailing stop when profit exceeds this %
   earnings_blackout_days: 5           # No buys N days before/after quarterly earnings
-  max_new_buys_per_week: 3            # Maximum new buy signals per week
+  max_new_buys_per_week: 20           # Paper trading: high cap to observe more signals
 
 # ── Signal Thresholds ───────────────────────────────────────────────────────
 signal:
