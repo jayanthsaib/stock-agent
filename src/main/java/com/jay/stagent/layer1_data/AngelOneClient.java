@@ -10,6 +10,8 @@ import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.*;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -50,6 +52,22 @@ public class AngelOneClient {
             .connectTimeout(10, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .build();
+    }
+
+    /**
+     * Auto-login on startup if no valid session exists.
+     * Runs after the full Spring context is ready (network available).
+     * Prevents mid-day restarts from leaving the broker unauthenticated.
+     */
+    @EventListener(ApplicationReadyEvent.class)
+    public void autoLoginOnStartup() {
+        if (!isAuthenticated()) {
+            log.info("No valid Angel One session on startup — attempting auto-login");
+            boolean success = login();
+            if (!success) {
+                log.warn("Auto-login on startup failed — call POST /api/broker/login manually");
+            }
+        }
     }
 
     // ── Authentication ─────────────────────────────────────────────────────────
