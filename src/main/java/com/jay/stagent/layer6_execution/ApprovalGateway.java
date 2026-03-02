@@ -3,8 +3,10 @@ package com.jay.stagent.layer6_execution;
 import com.jay.stagent.config.AgentConfig;
 import com.jay.stagent.entity.TradeRecord;
 import com.jay.stagent.layer5_report.PreTradeReportGenerator;
+import com.jay.stagent.model.ConfidenceScore;
 import com.jay.stagent.model.TradeSignal;
 import com.jay.stagent.model.enums.SignalStatus;
+import com.jay.stagent.model.enums.SignalType;
 import com.jay.stagent.notification.TelegramService;
 import com.jay.stagent.repository.TradeRecordRepository;
 import jakarta.annotation.PostConstruct;
@@ -13,6 +15,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -44,7 +47,45 @@ public class ApprovalGateway {
     public void init() {
         // Register Telegram message handler for APPROVE/REJECT commands
         telegramService.addMessageHandler(this::handleTelegramMessage);
-        log.info("ApprovalGateway initialized — listening for APPROVE/REJECT commands");
+
+        // Restore pending signals from DB — survives restarts
+        List<TradeRecord> pending = tradeRepo.findByStatus("PENDING_APPROVAL");
+        for (TradeRecord record : pending) {
+            pendingSignals.put(record.getTradeId(), reconstructSignal(record));
+        }
+        log.info("ApprovalGateway initialized — {} pending signal(s) restored from DB, listening for APPROVE/REJECT commands",
+            pending.size());
+    }
+
+    /** Rebuilds a minimal TradeSignal from a persisted TradeRecord (used on restart). */
+    private TradeSignal reconstructSignal(TradeRecord record) {
+        ConfidenceScore cs = ConfidenceScore.builder()
+            .composite(record.getConfidenceScore())
+            .fundamentalScore(record.getFundamentalScore())
+            .technicalScore(record.getTechnicalScore())
+            .macroScore(record.getMacroScore())
+            .riskRewardScore(record.getRiskRewardScore())
+            .build();
+        return TradeSignal.builder()
+            .tradeId(record.getTradeId())
+            .symbol(record.getSymbol())
+            .exchange(record.getExchange())
+            .sector(record.getSector())
+            .signalType(record.getSignalType() != null
+                ? SignalType.valueOf(record.getSignalType()) : SignalType.BUY)
+            .entryPrice(record.getEntryPrice())
+            .targetPrice(record.getTargetPrice())
+            .stopLossPrice(record.getStopLossPrice())
+            .riskRewardRatio(record.getRiskRewardRatio())
+            .capitalAllocationInr(record.getCapitalAllocationInr())
+            .confidenceScore(cs)
+            .status(SignalStatus.PENDING_APPROVAL)
+            .generatedAt(record.getGeneratedAt())
+            .expiresAt(record.getExpiresAt())
+            .fundamentalSummary(record.getFundamentalSummary())
+            .technicalSummary(record.getTechnicalSummary())
+            .macroContext(record.getMacroContext())
+            .build();
     }
 
     // ── Submitting Signals for Approval ───────────────────────────────────────

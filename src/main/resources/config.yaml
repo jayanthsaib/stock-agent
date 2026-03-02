@@ -32,7 +32,7 @@ risk:
 signal:
   min_confidence_to_notify: 60     # Below this, signal is discarded silently
   auto_execute_threshold: 90       # Above this, auto-execute (only if auto_mode: true)
-  approval_window_minutes: 30      # Minutes before unanswered signal auto-expires
+  approval_window_minutes: 240     # Minutes before unanswered signal auto-expires (4 hours)
 
 # ── Confidence Score Weights (must sum to 1.0) ───────────────────────────────
 confidence_weights:
