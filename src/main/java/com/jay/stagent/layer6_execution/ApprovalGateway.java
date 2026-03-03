@@ -164,7 +164,7 @@ public class ApprovalGateway {
     private void handleApproval(String tradeId) {
         TradeSignal signal = pendingSignals.remove(tradeId);
         if (signal == null) {
-            telegramService.sendMessage("❓ Unknown or already processed trade ID: " + tradeId);
+            telegramService.sendMessage(resolveUnknownSignalMessage(tradeId));
             return;
         }
 
@@ -191,7 +191,7 @@ public class ApprovalGateway {
     private void handleRejection(String tradeId, String reason) {
         TradeSignal signal = pendingSignals.remove(tradeId);
         if (signal == null) {
-            telegramService.sendMessage("❓ Unknown or already processed trade ID: " + tradeId);
+            telegramService.sendMessage(resolveUnknownSignalMessage(tradeId));
             return;
         }
 
@@ -276,6 +276,17 @@ public class ApprovalGateway {
     }
 
     // ── Utility ───────────────────────────────────────────────────────────────
+
+    /** Looks up DB to give a specific reason when a trade ID is not in the pending map. */
+    private String resolveUnknownSignalMessage(String tradeId) {
+        return tradeRepo.findById(tradeId).map(record -> switch (record.getStatus()) {
+            case "EXPIRED"  -> "⏰ Signal " + tradeId + " (" + record.getSymbol() + ") has expired — no action taken.";
+            case "APPROVED" -> "✅ Signal " + tradeId + " (" + record.getSymbol() + ") was already approved.";
+            case "REJECTED" -> "❌ Signal " + tradeId + " (" + record.getSymbol() + ") was already rejected.";
+            case "EXECUTED" -> "⚡ Signal " + tradeId + " (" + record.getSymbol() + ") is already executed.";
+            default -> "❓ Signal " + tradeId + " (" + record.getSymbol() + ") is in state: " + record.getStatus();
+        }).orElse("❓ Unknown trade ID: " + tradeId + " — not found in database.");
+    }
 
     private String extractTradeId(String text, String command) {
         String[] parts = text.trim().split("\\s+");
