@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
+<html xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
 
 <!-- ═══════════════════════════════════════════════════════════════════
      HEAD fragment — th:replace="~{fragments/layout :: head(title='...')}"
@@ -226,8 +227,8 @@
         </a>
     </nav>
 
-    <div class="nav-section-label" th:if="${#authentication?.authorities?.toString()?.contains('ROLE_ADMIN')}">Admin</div>
-    <nav class="sidebar-nav" th:if="${#authentication?.authorities?.toString()?.contains('ROLE_ADMIN')}">
+    <div class="nav-section-label" sec:authorize="hasRole('ADMIN')">Admin</div>
+    <nav class="sidebar-nav" sec:authorize="hasRole('ADMIN')">
         <a th:href="@{/admin/users}" th:classappend="${active == 'admin-users' ? 'active' : ''}">
             <i class="fa-solid fa-users-gear"></i> User Management
         </a>
@@ -237,7 +238,7 @@
         <div class="d-flex align-items-center justify-content-between mb-2">
             <span style="font-size:12px;color:#8b949e;">
                 <i class="fa-solid fa-user me-1"></i>
-                <span th:text="${#authentication?.name}">admin</span>
+                <span sec:authentication="name">admin</span>
             </span>
             <form th:action="@{/logout}" method="post" class="d-inline m-0">
                 <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
