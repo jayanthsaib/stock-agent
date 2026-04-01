@@ -4,377 +4,771 @@
     <meta charset="UTF-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1"/>
     <title>Cerebro — AI Trading Agent</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"/>
+    <link rel="preconnect" href="https://fonts.googleapis.com"/>
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
     <style>
         :root {
-            --bg-app:    #0d1117;
-            --bg-card:   #161b22;
-            --border:    #30363d;
-            --accent:    #238636;
-            --text-muted:#8b949e;
+            --bg:       #050810;
+            --bg-card:  #0d1117;
+            --border:   #1e2530;
+            --border-glow: #3b82f680;
+            --accent:   #3b82f6;
+            --accent2:  #8b5cf6;
+            --green:    #10b981;
+            --red:      #ef4444;
+            --text:     #e2e8f0;
+            --muted:    #64748b;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
+        html { scroll-behavior: smooth; }
         body {
-            background: var(--bg-app);
-            color: #c9d1d9;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Inter', -apple-system, sans-serif;
+            overflow-x: hidden;
+        }
+
+        /* ── Animated background grid ── */
+        body::before {
+            content: '';
+            position: fixed; inset: 0;
+            background-image:
+                linear-gradient(rgba(59,130,246,.04) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(59,130,246,.04) 1px, transparent 1px);
+            background-size: 64px 64px;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* ── Glow orbs ── */
+        .glow-orb {
+            position: fixed;
+            border-radius: 50%;
+            filter: blur(120px);
+            pointer-events: none;
+            z-index: 0;
+            animation: float 8s ease-in-out infinite;
+        }
+        .glow-orb-1 { width:500px; height:500px; background:#3b82f618; top:-100px; left:-100px; }
+        .glow-orb-2 { width:400px; height:400px; background:#8b5cf615; bottom:0; right:-100px; animation-delay:-4s; }
+        @keyframes float {
+            0%,100% { transform: translateY(0); }
+            50%      { transform: translateY(-30px); }
         }
 
         /* ── Navbar ── */
-        .navbar {
-            background: rgba(13,17,23,0.95);
+        nav {
+            position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 40px;
+            height: 64px;
+            background: rgba(5,8,16,.85);
             border-bottom: 1px solid var(--border);
-            padding: 16px 40px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            position: sticky;
-            top: 0;
-            z-index: 100;
-            backdrop-filter: blur(8px);
+            backdrop-filter: blur(20px);
         }
-        .navbar-brand {
+        .nav-brand {
             display: flex; align-items: center; gap: 10px;
-            font-size: 20px; font-weight: 700; color: #e6edf3;
-            text-decoration: none;
+            font-size: 20px; font-weight: 800; color: var(--text);
+            text-decoration: none; letter-spacing: -.5px;
         }
-        .btn-login {
-            background: var(--accent);
-            color: #fff;
-            border: none;
-            padding: 8px 22px;
-            border-radius: 6px;
-            font-weight: 600;
-            font-size: 14px;
-            text-decoration: none;
-            transition: background .2s;
+        .nav-brand .logo-icon {
+            width: 34px; height: 34px; border-radius: 8px;
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 16px; color: #fff;
         }
-        .btn-login:hover { background: #2ea043; color: #fff; }
+        .nav-right { display: flex; align-items: center; gap: 16px; }
+        .nav-tag {
+            font-size: 11px; font-weight: 600; padding: 3px 10px;
+            border-radius: 20px; border: 1px solid #10b98133;
+            background: #10b98111; color: #10b981; letter-spacing: .3px;
+        }
+        .btn-signin {
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            color: #fff; border: none;
+            padding: 8px 22px; border-radius: 8px;
+            font-size: 14px; font-weight: 700;
+            text-decoration: none;
+            display: inline-flex; align-items: center; gap: 7px;
+            transition: opacity .2s, transform .15s;
+            box-shadow: 0 0 20px #3b82f630;
+        }
+        .btn-signin:hover { opacity: .9; color: #fff; transform: translateY(-1px); }
+
+        /* ── Ticker ── */
+        .ticker-wrap {
+            position: relative; z-index: 1;
+            margin-top: 64px;
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border);
+            overflow: hidden; height: 36px;
+            display: flex; align-items: center;
+        }
+        .ticker-wrap::before, .ticker-wrap::after {
+            content: ''; position: absolute; top: 0; bottom: 0; width: 80px; z-index: 2;
+        }
+        .ticker-wrap::before { left: 0; background: linear-gradient(90deg, var(--bg-card), transparent); }
+        .ticker-wrap::after  { right: 0; background: linear-gradient(-90deg, var(--bg-card), transparent); }
+        .ticker {
+            display: flex; gap: 48px; align-items: center;
+            animation: ticker 30s linear infinite;
+            white-space: nowrap;
+        }
+        @keyframes ticker {
+            0%   { transform: translateX(0); }
+            100% { transform: translateX(-50%); }
+        }
+        .tick-item {
+            display: flex; align-items: center; gap: 8px;
+            font-size: 12px; font-weight: 600;
+        }
+        .tick-sym { color: var(--text); }
+        .tick-price { color: var(--muted); }
+        .tick-up   { color: var(--green); }
+        .tick-down { color: var(--red); }
 
         /* ── Hero ── */
         .hero {
-            text-align: center;
-            padding: 100px 20px 80px;
-            max-width: 800px;
-            margin: 0 auto;
+            position: relative; z-index: 1;
+            min-height: calc(100vh - 100px);
+            display: flex; align-items: center;
+            padding: 80px 40px;
+            max-width: 1200px; margin: 0 auto;
+            gap: 60px;
         }
-        .hero-badge {
-            display: inline-flex; align-items: center; gap: 6px;
-            background: #1f6feb22;
-            border: 1px solid #1f6feb55;
-            color: #58a6ff;
-            font-size: 12px; font-weight: 600;
-            padding: 4px 14px; border-radius: 20px;
-            margin-bottom: 28px;
-            letter-spacing: .5px;
+        .hero-left { flex: 1; min-width: 0; }
+        .hero-right { flex: 1; min-width: 0; }
+
+        .hero-pill {
+            display: inline-flex; align-items: center; gap: 8px;
+            background: linear-gradient(135deg, #3b82f611, #8b5cf611);
+            border: 1px solid #3b82f633;
+            color: #93c5fd; font-size: 12px; font-weight: 600;
+            padding: 6px 16px; border-radius: 20px;
+            margin-bottom: 32px; letter-spacing: .3px;
         }
-        .hero h1 {
-            font-size: 56px;
-            font-weight: 800;
-            color: #e6edf3;
-            line-height: 1.1;
-            margin-bottom: 20px;
+        .pulse-dot {
+            width: 7px; height: 7px; border-radius: 50%;
+            background: var(--green);
+            box-shadow: 0 0 8px var(--green);
+            animation: pulse 2s ease infinite;
+        }
+        @keyframes pulse {
+            0%,100% { opacity: 1; transform: scale(1); }
+            50%      { opacity: .6; transform: scale(.8); }
+        }
+
+        .hero-title {
+            font-size: clamp(40px, 5vw, 64px);
+            font-weight: 900;
+            line-height: 1.05;
+            letter-spacing: -2px;
+            margin-bottom: 24px;
+        }
+        .gradient-text {
+            background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 50%, #06b6d4 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .hero-desc {
+            font-size: 17px; color: var(--muted); line-height: 1.75;
+            margin-bottom: 40px; max-width: 520px;
+        }
+        .hero-cta {
+            display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 56px;
+        }
+        .btn-primary-glow {
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            color: #fff; border: none;
+            padding: 14px 32px; border-radius: 10px;
+            font-size: 15px; font-weight: 700;
+            text-decoration: none;
+            display: inline-flex; align-items: center; gap: 8px;
+            transition: transform .15s, box-shadow .2s;
+            box-shadow: 0 0 30px #3b82f640, 0 4px 20px #0008;
+        }
+        .btn-primary-glow:hover { color:#fff; transform:translateY(-2px); box-shadow:0 0 50px #3b82f660,0 8px 30px #0008; }
+        .btn-ghost {
+            background: transparent;
+            color: var(--muted); border: 1px solid var(--border);
+            padding: 14px 28px; border-radius: 10px;
+            font-size: 15px; font-weight: 600;
+            text-decoration: none;
+            display: inline-flex; align-items: center; gap: 8px;
+            transition: border-color .2s, color .2s;
+        }
+        .btn-ghost:hover { border-color: #3b82f655; color: var(--text); }
+
+        .hero-stats {
+            display: flex; gap: 32px; flex-wrap: wrap;
+        }
+        .hstat { }
+        .hstat .num {
+            font-size: 26px; font-weight: 800; color: var(--text);
             letter-spacing: -1px;
         }
-        .hero h1 span { color: #58a6ff; }
-        .hero p {
-            font-size: 18px;
-            color: var(--text-muted);
-            line-height: 1.7;
-            margin-bottom: 40px;
-            max-width: 600px;
-            margin-left: auto;
-            margin-right: auto;
-        }
-        .hero-actions {
-            display: flex; align-items: center; justify-content: center; gap: 16px;
-            flex-wrap: wrap;
-        }
-        .btn-hero-primary {
-            background: var(--accent);
-            color: #fff; border: none;
-            padding: 14px 32px; border-radius: 8px;
-            font-size: 16px; font-weight: 700;
-            text-decoration: none;
-            display: inline-flex; align-items: center; gap: 8px;
-            transition: background .2s, transform .15s;
-        }
-        .btn-hero-primary:hover { background: #2ea043; color: #fff; transform: translateY(-1px); }
-        .btn-hero-secondary {
-            background: transparent;
-            color: #c9d1d9;
-            border: 1px solid var(--border);
-            padding: 14px 32px; border-radius: 8px;
-            font-size: 16px; font-weight: 600;
-            text-decoration: none;
-            display: inline-flex; align-items: center; gap: 8px;
-            transition: border-color .2s;
-        }
-        .btn-hero-secondary:hover { border-color: #8b949e; color: #e6edf3; }
+        .hstat .lbl { font-size: 11px; color: var(--muted); margin-top: 2px; letter-spacing: .3px; }
 
-        /* ── Stats bar ── */
-        .stats-bar {
-            border-top: 1px solid var(--border);
+        /* ── Mock signal card ── */
+        .signal-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 0 60px #3b82f615, 0 20px 60px #0008;
+            position: relative;
+        }
+        .signal-card::before {
+            content: '';
+            position: absolute; top: 0; left: 0; right: 0; height: 1px;
+            background: linear-gradient(90deg, transparent, #3b82f6, #8b5cf6, transparent);
+        }
+        .sc-header {
+            background: #0d1117;
             border-bottom: 1px solid var(--border);
-            background: var(--bg-card);
-            display: flex; justify-content: center;
-            flex-wrap: wrap;
-            padding: 28px 40px;
-            gap: 48px;
+            padding: 12px 16px;
+            display: flex; align-items: center; gap: 8px;
         }
-        .stat-item { text-align: center; }
-        .stat-item .num {
-            font-size: 28px; font-weight: 700; color: #e6edf3;
-        }
-        .stat-item .lbl {
-            font-size: 12px; color: var(--text-muted); margin-top: 4px;
-        }
-
-        /* ── Features ── */
-        .features {
-            max-width: 1100px;
-            margin: 80px auto;
-            padding: 0 24px;
-        }
-        .section-title {
-            text-align: center;
-            font-size: 32px; font-weight: 700; color: #e6edf3;
-            margin-bottom: 12px;
-        }
-        .section-sub {
-            text-align: center;
-            color: var(--text-muted);
-            font-size: 16px;
-            margin-bottom: 56px;
-        }
-        .features-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 20px;
-        }
-        .feature-card {
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 28px;
-            transition: border-color .2s, transform .2s;
-        }
-        .feature-card:hover { border-color: #58a6ff55; transform: translateY(-2px); }
-        .feature-icon {
-            width: 44px; height: 44px;
-            border-radius: 10px;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 20px;
+        .sc-dot { width:10px; height:10px; border-radius:50%; }
+        .sc-title { font-size:11px; color:var(--muted); font-weight:600; margin-left:4px; letter-spacing:.5px; }
+        .sc-body { padding: 20px; }
+        .sc-signal-header {
+            display: flex; align-items: center; justify-content: space-between;
             margin-bottom: 16px;
         }
-        .feature-card h3 {
-            font-size: 16px; font-weight: 700; color: #e6edf3;
-            margin-bottom: 8px;
+        .sc-badge-buy {
+            background: #10b98122; border: 1px solid #10b98144;
+            color: #10b981; font-size: 11px; font-weight: 700;
+            padding: 3px 10px; border-radius: 4px; letter-spacing: .5px;
         }
-        .feature-card p {
-            font-size: 13.5px; color: var(--text-muted); line-height: 1.6;
+        .sc-symbol { font-size: 22px; font-weight: 800; color: var(--text); }
+        .sc-sector { font-size: 11px; color: var(--muted); margin-top: 2px; }
+        .sc-conf {
+            text-align: right;
+        }
+        .sc-conf .score {
+            font-size: 28px; font-weight: 900;
+            background: linear-gradient(135deg,#10b981,#3b82f6);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+        }
+        .sc-conf .slbl { font-size: 10px; color: var(--muted); }
+        .sc-grid {
+            display: grid; grid-template-columns: 1fr 1fr 1fr;
+            gap: 12px; margin-bottom: 16px;
+        }
+        .sc-cell {
+            background: #050810;
+            border: 1px solid var(--border);
+            border-radius: 8px; padding: 10px 12px;
+        }
+        .sc-cell .cl { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; margin-bottom: 4px; }
+        .sc-cell .cv { font-size: 14px; font-weight: 700; color: var(--text); }
+        .sc-cell .cv.green { color: var(--green); }
+        .sc-cell .cv.red   { color: var(--red); }
+        .sc-cell .cv.blue  { color: #60a5fa; }
+        .sc-bars { margin-bottom: 16px; }
+        .sc-bar-row { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+        .sc-bar-lbl { font-size:10px; color:var(--muted); width:70px; flex-shrink:0; }
+        .sc-bar-track { flex:1; height:4px; border-radius:2px; background:#1e2530; overflow:hidden; }
+        .sc-bar-fill { height:100%; border-radius:2px; }
+        .sc-bar-val { font-size:10px; font-weight:600; color:var(--text); width:28px; text-align:right; }
+        .sc-footer {
+            background: #050810;
+            border-top: 1px solid var(--border);
+            padding: 10px 20px;
+            display: flex; align-items: center; justify-content: space-between;
+        }
+        .sc-id { font-size:10px; color:var(--muted); font-family:monospace; }
+        .sc-action {
+            display: flex; gap: 8px;
+        }
+        .sc-btn-approve {
+            background:#10b98122; border:1px solid #10b98144; color:#10b981;
+            font-size:11px; font-weight:700; padding:4px 12px; border-radius:5px;
+        }
+        .sc-btn-reject {
+            background:#ef444422; border:1px solid #ef444444; color:#ef4444;
+            font-size:11px; font-weight:700; padding:4px 12px; border-radius:5px;
+        }
+        .typing-cursor {
+            display:inline-block; width:2px; height:14px;
+            background:var(--accent); margin-left:2px; vertical-align:middle;
+            animation: blink 1s step-end infinite;
+        }
+        @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+        /* ── Sections ── */
+        section { position: relative; z-index: 1; }
+
+        /* ── Divider ── */
+        .gradient-divider {
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--border), transparent);
         }
 
+        /* ── Stats row ── */
+        .stats-row {
+            display: flex; justify-content: center; flex-wrap: wrap; gap: 0;
+            border-top: 1px solid var(--border);
+            border-bottom: 1px solid var(--border);
+            background: var(--bg-card);
+        }
+        .stat-box {
+            flex: 1; min-width: 150px;
+            text-align: center;
+            padding: 32px 24px;
+            border-right: 1px solid var(--border);
+            transition: background .2s;
+        }
+        .stat-box:last-child { border-right: none; }
+        .stat-box:hover { background: #ffffff05; }
+        .stat-box .big {
+            font-size: 36px; font-weight: 900; letter-spacing: -1.5px;
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+        }
+        .stat-box .lbl { font-size: 12px; color: var(--muted); margin-top: 6px; font-weight: 500; }
+
+        /* ── Features ── */
+        .features-section {
+            max-width: 1200px; margin: 0 auto;
+            padding: 100px 40px;
+        }
+        .section-eyebrow {
+            text-align: center;
+            font-size: 12px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase;
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+            margin-bottom: 16px;
+        }
+        .section-h2 {
+            text-align: center;
+            font-size: 36px; font-weight: 800; letter-spacing: -1px;
+            color: var(--text); margin-bottom: 12px;
+        }
+        .section-sub {
+            text-align: center; font-size: 16px; color: var(--muted);
+            max-width: 520px; margin: 0 auto 60px; line-height: 1.7;
+        }
+        .feat-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 20px;
+        }
+        .feat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 14px; padding: 28px;
+            transition: border-color .25s, transform .25s, box-shadow .25s;
+            position: relative; overflow: hidden;
+        }
+        .feat-card::before {
+            content: '';
+            position: absolute; inset: 0; border-radius: 14px;
+            background: linear-gradient(135deg, #3b82f608, transparent);
+            opacity: 0; transition: opacity .25s;
+        }
+        .feat-card:hover { border-color: #3b82f644; transform: translateY(-4px); box-shadow: 0 20px 40px #0006, 0 0 30px #3b82f610; }
+        .feat-card:hover::before { opacity: 1; }
+        .feat-icon {
+            width: 48px; height: 48px; border-radius: 12px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 20px; margin-bottom: 18px;
+        }
+        .feat-card h3 { font-size: 16px; font-weight: 700; color: var(--text); margin-bottom: 10px; }
+        .feat-card p  { font-size: 13.5px; color: var(--muted); line-height: 1.65; }
+
         /* ── How it works ── */
-        .how-it-works {
+        .how-section {
             background: var(--bg-card);
             border-top: 1px solid var(--border);
             border-bottom: 1px solid var(--border);
-            padding: 80px 24px;
+            padding: 100px 40px;
         }
-        .steps {
-            max-width: 900px;
-            margin: 0 auto;
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 32px;
+        .steps-row {
+            max-width: 1000px; margin: 0 auto;
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+            gap: 40px; position: relative;
         }
-        .step { text-align: center; }
-        .step-num {
-            width: 48px; height: 48px;
-            border-radius: 50%;
-            background: #1f6feb22;
-            border: 2px solid #1f6feb55;
-            color: #58a6ff;
-            font-size: 18px; font-weight: 700;
+        .step-item { text-align: center; }
+        .step-circle {
+            width: 56px; height: 56px; border-radius: 50%;
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
             display: flex; align-items: center; justify-content: center;
-            margin: 0 auto 16px;
+            font-size: 20px; font-weight: 900; color: #fff;
+            margin: 0 auto 20px;
+            box-shadow: 0 0 24px #3b82f640;
         }
-        .step h4 { font-size: 15px; font-weight: 600; color: #e6edf3; margin-bottom: 8px; }
-        .step p  { font-size: 13px; color: var(--text-muted); line-height: 1.5; }
+        .step-item h4 { font-size: 16px; font-weight: 700; color: var(--text); margin-bottom: 10px; }
+        .step-item p  { font-size: 13px; color: var(--muted); line-height: 1.6; }
 
-        /* ── CTA ── */
-        .cta {
-            text-align: center;
-            padding: 80px 24px;
-            max-width: 600px;
-            margin: 0 auto;
+        /* ── CTA section ── */
+        .cta-section {
+            position: relative; z-index: 1;
+            text-align: center; padding: 120px 24px;
+            overflow: hidden;
         }
-        .cta h2 { font-size: 36px; font-weight: 700; color: #e6edf3; margin-bottom: 16px; }
-        .cta p  { color: var(--text-muted); font-size: 16px; margin-bottom: 36px; }
+        .cta-section::before {
+            content: '';
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: 600px; height: 300px;
+            background: radial-gradient(ellipse, #3b82f618 0%, transparent 70%);
+            pointer-events: none;
+        }
+        .cta-section h2 {
+            font-size: 44px; font-weight: 900; letter-spacing: -1.5px;
+            color: var(--text); margin-bottom: 16px;
+        }
+        .cta-section p { font-size: 17px; color: var(--muted); margin-bottom: 40px; }
 
         /* ── Footer ── */
         footer {
             border-top: 1px solid var(--border);
-            text-align: center;
-            padding: 24px;
-            font-size: 12px;
-            color: var(--text-muted);
+            padding: 28px 40px;
+            display: flex; align-items: center; justify-content: space-between;
+            flex-wrap: wrap; gap: 12px;
+            font-size: 12px; color: var(--muted);
+            position: relative; z-index: 1;
+        }
+        footer a { color: var(--muted); text-decoration: none; }
+        footer a:hover { color: var(--text); }
+
+        /* ── Scroll reveal ── */
+        .reveal { opacity: 0; transform: translateY(28px); transition: opacity .6s ease, transform .6s ease; }
+        .reveal.visible { opacity: 1; transform: translateY(0); }
+
+        /* ── Responsive ── */
+        @media (max-width: 900px) {
+            .hero { flex-direction: column; padding: 60px 20px; min-height: auto; }
+            .hero-right { display: none; }
+            .stats-row { gap: 0; }
+            nav { padding: 0 20px; }
+            .nav-tag { display: none; }
+            footer { justify-content: center; text-align: center; }
         }
     </style>
 </head>
 <body>
 
+<!-- Glow orbs -->
+<div class="glow-orb glow-orb-1"></div>
+<div class="glow-orb glow-orb-2"></div>
+
 <!-- Navbar -->
-<nav class="navbar">
-    <a href="/" class="navbar-brand">
-        <i class="fa-solid fa-robot" style="color:#58a6ff;font-size:22px;"></i>
+<nav>
+    <a href="/" class="nav-brand">
+        <div class="logo-icon"><i class="fa-solid fa-robot"></i></div>
         Cerebro
     </a>
-    <a th:href="@{/login}" class="btn-login">
-        <i class="fa-solid fa-right-to-bracket me-1"></i> Sign In
-    </a>
+    <div class="nav-right">
+        <span class="nav-tag"><i class="fa-solid fa-circle" style="font-size:7px;margin-right:5px;"></i>Live on NSE</span>
+        <a th:href="@{/login}" class="btn-signin">
+            <i class="fa-solid fa-right-to-bracket"></i> Sign In
+        </a>
+    </div>
 </nav>
 
-<!-- Hero -->
-<section class="hero">
-    <div class="hero-badge">
-        <i class="fa-solid fa-circle" style="font-size:8px;color:#3fb950;"></i>
-        Live on NSE &nbsp;·&nbsp; Paper Trading Mode
+<!-- Live ticker -->
+<div class="ticker-wrap">
+    <div class="ticker">
+        <!-- repeated twice for seamless loop -->
+        <div class="tick-item"><span class="tick-sym">RELIANCE</span><span class="tick-price">₹2,847</span><span class="tick-up">+1.4%</span></div>
+        <div class="tick-item"><span class="tick-sym">TCS</span><span class="tick-price">₹3,612</span><span class="tick-up">+0.8%</span></div>
+        <div class="tick-item"><span class="tick-sym">HDFCBANK</span><span class="tick-price">₹1,724</span><span class="tick-down">-0.5%</span></div>
+        <div class="tick-item"><span class="tick-sym">INFY</span><span class="tick-price">₹1,490</span><span class="tick-up">+2.1%</span></div>
+        <div class="tick-item"><span class="tick-sym">ICICIBANK</span><span class="tick-price">₹1,102</span><span class="tick-up">+0.3%</span></div>
+        <div class="tick-item"><span class="tick-sym">WIPRO</span><span class="tick-price">₹462</span><span class="tick-down">-1.2%</span></div>
+        <div class="tick-item"><span class="tick-sym">BHARTIARTL</span><span class="tick-price">₹1,671</span><span class="tick-up">+0.6%</span></div>
+        <div class="tick-item"><span class="tick-sym">NIFTY 50</span><span class="tick-price">₹23,814</span><span class="tick-up">+0.7%</span></div>
+        <div class="tick-item"><span class="tick-sym">SENSEX</span><span class="tick-price">₹78,402</span><span class="tick-up">+0.5%</span></div>
+        <div class="tick-item"><span class="tick-sym">BAJFINANCE</span><span class="tick-price">₹7,210</span><span class="tick-down">-0.9%</span></div>
+        <!-- duplicate for seamless -->
+        <div class="tick-item"><span class="tick-sym">RELIANCE</span><span class="tick-price">₹2,847</span><span class="tick-up">+1.4%</span></div>
+        <div class="tick-item"><span class="tick-sym">TCS</span><span class="tick-price">₹3,612</span><span class="tick-up">+0.8%</span></div>
+        <div class="tick-item"><span class="tick-sym">HDFCBANK</span><span class="tick-price">₹1,724</span><span class="tick-down">-0.5%</span></div>
+        <div class="tick-item"><span class="tick-sym">INFY</span><span class="tick-price">₹1,490</span><span class="tick-up">+2.1%</span></div>
+        <div class="tick-item"><span class="tick-sym">ICICIBANK</span><span class="tick-price">₹1,102</span><span class="tick-up">+0.3%</span></div>
+        <div class="tick-item"><span class="tick-sym">WIPRO</span><span class="tick-price">₹462</span><span class="tick-down">-1.2%</span></div>
+        <div class="tick-item"><span class="tick-sym">BHARTIARTL</span><span class="tick-price">₹1,671</span><span class="tick-up">+0.6%</span></div>
+        <div class="tick-item"><span class="tick-sym">NIFTY 50</span><span class="tick-price">₹23,814</span><span class="tick-up">+0.7%</span></div>
+        <div class="tick-item"><span class="tick-sym">SENSEX</span><span class="tick-price">₹78,402</span><span class="tick-up">+0.5%</span></div>
+        <div class="tick-item"><span class="tick-sym">BAJFINANCE</span><span class="tick-price">₹7,210</span><span class="tick-down">-0.9%</span></div>
     </div>
-    <h1>Your <span>AI-Powered</span><br/>Trading Agent</h1>
-    <p>Cerebro scans 500+ NSE stocks daily, generates high-conviction trade signals, validates every risk rule, and waits for your approval before executing — all autonomously.</p>
-    <div class="hero-actions">
-        <a th:href="@{/login}" class="btn-hero-primary">
-            <i class="fa-solid fa-right-to-bracket"></i> Go to Dashboard
-        </a>
-        <a href="https://github.com/jayanthsaib/stock-agent" target="_blank" class="btn-hero-secondary">
-            <i class="fa-brands fa-github"></i> View on GitHub
-        </a>
+</div>
+
+<!-- Hero -->
+<section>
+    <div class="hero">
+        <div class="hero-left">
+            <div class="hero-pill">
+                <div class="pulse-dot"></div>
+                AI Agent · Live on NSE · Paper Trading
+            </div>
+            <h1 class="hero-title">
+                Trade Smarter<br/>with <span class="gradient-text">AI That<br/>Never Sleeps</span>
+            </h1>
+            <p class="hero-desc">
+                Cerebro scans 500+ NSE stocks daily, generates high-conviction signals, validates 15+ risk rules, and sends you trade approvals on Telegram — fully automated, fully transparent.
+            </p>
+            <div class="hero-cta">
+                <a th:href="@{/login}" class="btn-primary-glow">
+                    <i class="fa-solid fa-gauge"></i> Open Dashboard
+                </a>
+                <a href="https://github.com/jayanthsaib/stock-agent" target="_blank" class="btn-ghost">
+                    <i class="fa-brands fa-github"></i> GitHub
+                </a>
+            </div>
+            <div class="hero-stats">
+                <div class="hstat">
+                    <div class="num" data-target="500">0</div>
+                    <div class="lbl">STOCKS SCANNED</div>
+                </div>
+                <div class="hstat">
+                    <div class="num" data-target="15">0</div>
+                    <div class="lbl">RISK RULES</div>
+                </div>
+                <div class="hstat">
+                    <div class="num" data-target="7">0</div>
+                    <div class="lbl">AI LAYERS</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mock Signal Card -->
+        <div class="hero-right">
+            <div class="signal-card">
+                <div class="sc-header">
+                    <div class="sc-dot" style="background:#ef4444;"></div>
+                    <div class="sc-dot" style="background:#f59e0b;margin-left:5px;"></div>
+                    <div class="sc-dot" style="background:#10b981;margin-left:5px;"></div>
+                    <span class="sc-title">CEREBRO — LIVE SIGNAL<span class="typing-cursor"></span></span>
+                </div>
+                <div class="sc-body">
+                    <div class="sc-signal-header">
+                        <div>
+                            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                                <span class="sc-badge-buy">BUY</span>
+                                <span style="font-size:10px;color:var(--muted);">NSE</span>
+                            </div>
+                            <div class="sc-symbol">HDFCAMC</div>
+                            <div class="sc-sector">Asset Management · Finance</div>
+                        </div>
+                        <div class="sc-conf">
+                            <div class="score">87%</div>
+                            <div class="slbl">CONFIDENCE</div>
+                        </div>
+                    </div>
+                    <div class="sc-grid">
+                        <div class="sc-cell">
+                            <div class="cl">Entry</div>
+                            <div class="cv blue">₹4,210</div>
+                        </div>
+                        <div class="sc-cell">
+                            <div class="cl">Target</div>
+                            <div class="cv green">₹4,830</div>
+                        </div>
+                        <div class="sc-cell">
+                            <div class="cl">Stop Loss</div>
+                            <div class="cv red">₹3,990</div>
+                        </div>
+                        <div class="sc-cell">
+                            <div class="cl">R:R Ratio</div>
+                            <div class="cv" style="color:#a78bfa;">2.82x</div>
+                        </div>
+                        <div class="sc-cell">
+                            <div class="cl">Capital</div>
+                            <div class="cv" style="color:#e2e8f0;">₹25,000</div>
+                        </div>
+                        <div class="sc-cell">
+                            <div class="cl">Upside</div>
+                            <div class="cv green">+14.7%</div>
+                        </div>
+                    </div>
+                    <div class="sc-bars">
+                        <div class="sc-bar-row">
+                            <div class="sc-bar-lbl">Fundamental</div>
+                            <div class="sc-bar-track"><div class="sc-bar-fill" style="width:82%;background:linear-gradient(90deg,#3b82f6,#8b5cf6);"></div></div>
+                            <div class="sc-bar-val">82</div>
+                        </div>
+                        <div class="sc-bar-row">
+                            <div class="sc-bar-lbl">Technical</div>
+                            <div class="sc-bar-track"><div class="sc-bar-fill" style="width:91%;background:linear-gradient(90deg,#10b981,#3b82f6);"></div></div>
+                            <div class="sc-bar-val">91</div>
+                        </div>
+                        <div class="sc-bar-row">
+                            <div class="sc-bar-lbl">Macro</div>
+                            <div class="sc-bar-track"><div class="sc-bar-fill" style="width:74%;background:linear-gradient(90deg,#f59e0b,#ef4444);"></div></div>
+                            <div class="sc-bar-val">74</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="sc-footer">
+                    <span class="sc-id">TRD-CF39A3F1 · 09:15 IST</span>
+                    <div class="sc-action">
+                        <button class="sc-btn-approve">✓ APPROVE</button>
+                        <button class="sc-btn-reject">✗ REJECT</button>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 </section>
 
-<!-- Stats bar -->
-<div class="stats-bar">
-    <div class="stat-item">
-        <div class="num">500+</div>
+<!-- Stats row -->
+<div class="stats-row">
+    <div class="stat-box reveal">
+        <div class="big">500+</div>
         <div class="lbl">NSE Stocks Scanned Daily</div>
     </div>
-    <div class="stat-item">
-        <div class="num">15+</div>
+    <div class="stat-box reveal" style="transition-delay:.1s">
+        <div class="big">15+</div>
         <div class="lbl">Hard Risk Rules</div>
     </div>
-    <div class="stat-item">
-        <div class="num">7</div>
-        <div class="lbl">Analysis Layers</div>
+    <div class="stat-box reveal" style="transition-delay:.2s">
+        <div class="big">7</div>
+        <div class="lbl">AI Analysis Layers</div>
     </div>
-    <div class="stat-item">
-        <div class="num">24/7</div>
-        <div class="lbl">Always Running on AWS</div>
+    <div class="stat-box reveal" style="transition-delay:.3s">
+        <div class="big">24/7</div>
+        <div class="lbl">Always-On AWS Agent</div>
     </div>
 </div>
 
 <!-- Features -->
-<section class="features">
-    <div class="section-title">Everything you need to trade smarter</div>
-    <div class="section-sub">From data to execution — fully automated, fully transparent</div>
-    <div class="features-grid">
+<section class="features-section">
+    <div class="section-eyebrow reveal">What Cerebro Does</div>
+    <h2 class="section-h2 reveal">Everything you need to trade smarter</h2>
+    <p class="section-sub reveal">From raw market data to an approved trade — fully automated, fully auditable</p>
 
-        <div class="feature-card">
-            <div class="feature-icon" style="background:#1f6feb22;color:#58a6ff;">
+    <div class="feat-grid">
+        <div class="feat-card reveal">
+            <div class="feat-icon" style="background:linear-gradient(135deg,#3b82f622,#3b82f611);color:#60a5fa;">
                 <i class="fa-solid fa-brain"></i>
             </div>
             <h3>AI Signal Generation</h3>
-            <p>Combines fundamental analysis, technical indicators, and macro context to score every stock with a confidence rating before sending a signal.</p>
+            <p>Fundamental analysis, technical indicators (RSI, EMA, MACD), and macro context all feed into a single confidence score for each stock.</p>
         </div>
-
-        <div class="feature-card">
-            <div class="feature-icon" style="background:#23863622;color:#3fb950;">
+        <div class="feat-card reveal" style="transition-delay:.05s">
+            <div class="feat-icon" style="background:linear-gradient(135deg,#10b98122,#10b98111);color:#34d399;">
                 <i class="fa-solid fa-shield-halved"></i>
             </div>
-            <h3>15+ Risk Rules</h3>
-            <p>Every signal passes through hard risk validation — position sizing, drawdown limits, sector concentration, R:R ratio, and more. No signal skips this.</p>
+            <h3>15+ Hard Risk Rules</h3>
+            <p>Position sizing, portfolio drawdown limits, sector concentration caps, R:R ratio gates — every signal must pass all rules before reaching you.</p>
         </div>
-
-        <div class="feature-card">
-            <div class="feature-icon" style="background:#d2992222;color:#f0883e;">
+        <div class="feat-card reveal" style="transition-delay:.1s">
+            <div class="feat-icon" style="background:linear-gradient(135deg,#8b5cf622,#8b5cf611);color:#a78bfa;">
                 <i class="fa-brands fa-telegram"></i>
             </div>
             <h3>Telegram Approval</h3>
-            <p>Receive every trade signal on Telegram with a full breakdown. Reply APPROVE or REJECT — you're always in control before any trade is placed.</p>
+            <p>Receive a full signal report on Telegram — entry, target, stop-loss, confidence breakdown. Reply APPROVE or REJECT. You're always in control.</p>
         </div>
-
-        <div class="feature-card">
-            <div class="feature-icon" style="background:#da363322;color:#f85149;">
+        <div class="feat-card reveal" style="transition-delay:.15s">
+            <div class="feat-icon" style="background:linear-gradient(135deg,#06b6d422,#06b6d411);color:#22d3ee;">
                 <i class="fa-solid fa-chart-line"></i>
             </div>
             <h3>Live Portfolio Monitor</h3>
-            <p>Track open positions every 15 minutes with live prices, unrealised P&L, stop-loss monitoring, and automatic exit signals when targets are hit.</p>
+            <p>Open positions tracked every 15 minutes with live prices and P&L. Automatic stop-loss and target-hit detection with instant Telegram alerts.</p>
         </div>
-
-        <div class="feature-card">
-            <div class="feature-icon" style="background:#8957e522;color:#d2a8ff;">
+        <div class="feat-card reveal" style="transition-delay:.2s">
+            <div class="feat-icon" style="background:linear-gradient(135deg,#f59e0b22,#f59e0b11);color:#fbbf24;">
                 <i class="fa-solid fa-flask"></i>
             </div>
             <h3>Backtesting Engine</h3>
-            <p>Test any strategy against historical OHLCV data. See win rate, average return, max drawdown, and Sharpe ratio before going live.</p>
+            <p>Run the full strategy against 1-year historical OHLCV data. Get win rate, average return, max drawdown, and Sharpe ratio before risking real capital.</p>
         </div>
-
-        <div class="feature-card">
-            <div class="feature-icon" style="background:#1f6feb22;color:#58a6ff;">
+        <div class="feat-card reveal" style="transition-delay:.25s">
+            <div class="feat-icon" style="background:linear-gradient(135deg,#ef444422,#ef444411);color:#f87171;">
                 <i class="fa-solid fa-rotate"></i>
             </div>
-            <h3>Self-Learning</h3>
-            <p>Monthly learning reviews analyse past trades — what worked, what didn't — and adjust signal weights automatically to improve over time.</p>
+            <h3>Self-Learning Engine</h3>
+            <p>Monthly reviews analyse which signals succeeded and failed. Signal weights are automatically adjusted to improve accuracy over time.</p>
         </div>
-
     </div>
 </section>
 
 <!-- How it works -->
-<section class="how-it-works">
-    <div class="section-title">How Cerebro Works</div>
-    <div class="section-sub" style="margin-bottom:48px;">Four steps from raw data to executed trade</div>
-    <div class="steps">
-        <div class="step">
-            <div class="step-num">1</div>
-            <h4>Scan</h4>
-            <p>Phase 1+2 data ingestion scans 500+ NSE stocks — price filters, volume filters, 1-year OHLCV history.</p>
+<section class="how-section">
+    <div class="section-eyebrow reveal">The Process</div>
+    <h2 class="section-h2 reveal">How Cerebro Works</h2>
+    <p class="section-sub reveal">Four automated steps from raw data to an executed trade</p>
+    <div class="steps-row">
+        <div class="step-item reveal">
+            <div class="step-circle">1</div>
+            <h4>Scan Market</h4>
+            <p>Phase 1+2 ingestion scans 500+ NSE stocks — batch price quotes, volume filters, 1-year OHLCV history loaded via Angel One SmartAPI.</p>
         </div>
-        <div class="step">
-            <div class="step-num">2</div>
-            <h4>Analyse</h4>
-            <p>Fundamental, technical, and macro modules score each stock in parallel. Only high-conviction candidates proceed.</p>
+        <div class="step-item reveal" style="transition-delay:.1s">
+            <div class="step-circle">2</div>
+            <h4>AI Analysis</h4>
+            <p>Fundamental, technical, and macro modules run in parallel. Each stock receives a composite confidence score. Only top candidates proceed.</p>
         </div>
-        <div class="step">
-            <div class="step-num">3</div>
-            <h4>Validate</h4>
-            <p>15+ hard risk rules filter out bad setups. Entry, target, stop-loss, and position size are calculated automatically.</p>
+        <div class="step-item reveal" style="transition-delay:.2s">
+            <div class="step-circle">3</div>
+            <h4>Risk Validation</h4>
+            <p>15+ hard rules filter every signal. Entry price, target, stop-loss, and capital allocation are calculated automatically for each trade.</p>
         </div>
-        <div class="step">
-            <div class="step-num">4</div>
-            <h4>Execute</h4>
-            <p>You approve or reject on Telegram. Approved signals are placed as paper or live orders via Angel One SmartAPI.</p>
+        <div class="step-item reveal" style="transition-delay:.3s">
+            <div class="step-circle">4</div>
+            <h4>You Decide</h4>
+            <p>A full signal report lands in your Telegram. APPROVE to place the order via Angel One SmartAPI. REJECT to skip. Your capital, your call.</p>
         </div>
     </div>
 </section>
 
 <!-- CTA -->
-<section class="cta">
-    <h2>Ready to let AI trade for you?</h2>
-    <p>Sign in to your Cerebro dashboard and see what the market looks like today.</p>
-    <a th:href="@{/login}" class="btn-hero-primary" style="font-size:15px;padding:14px 40px;">
-        <i class="fa-solid fa-right-to-bracket"></i> Sign In to Dashboard
+<section class="cta-section">
+    <div class="hero-pill reveal" style="margin-bottom:24px;display:inline-flex;">
+        <div class="pulse-dot"></div>
+        Agent is running right now
+    </div>
+    <h2 class="reveal">Ready to trade with AI?</h2>
+    <p class="reveal">Sign in to your Cerebro dashboard and see today's signals.</p>
+    <a th:href="@{/login}" class="btn-primary-glow reveal" style="font-size:16px;padding:16px 44px;">
+        <i class="fa-solid fa-gauge"></i> Open Dashboard
     </a>
 </section>
 
 <!-- Footer -->
 <footer>
-    &copy; 2026 Cerebro &nbsp;·&nbsp; Built on AWS &nbsp;·&nbsp; NSE India &nbsp;·&nbsp;
-    <a href="https://github.com/jayanthsaib/stock-agent" target="_blank" style="color:var(--text-muted);">GitHub</a>
+    <span>&copy; 2026 Cerebro &nbsp;·&nbsp; Built on AWS Mumbai &nbsp;·&nbsp; NSE India</span>
+    <span>
+        <a href="https://github.com/jayanthsaib/stock-agent" target="_blank" style="margin-right:16px;">
+            <i class="fa-brands fa-github me-1"></i>GitHub
+        </a>
+        <a th:href="@{/login}">Sign In</a>
+    </span>
 </footer>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    // Scroll reveal
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
+    }, { threshold: 0.1 });
+    document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+    // Counter animation
+    const counters = document.querySelectorAll('.hstat .num[data-target]');
+    const countObserver = new IntersectionObserver((entries) => {
+        entries.forEach(e => {
+            if (!e.isIntersecting) return;
+            const el = e.target;
+            const target = +el.dataset.target;
+            const suffix = target >= 500 ? '+' : target >= 15 ? '+' : '';
+            let current = 0;
+            const step = Math.ceil(target / 40);
+            const timer = setInterval(() => {
+                current = Math.min(current + step, target);
+                el.textContent = current + suffix;
+                if (current >= target) clearInterval(timer);
+            }, 40);
+            countObserver.unobserve(el);
+        });
+    }, { threshold: 0.5 });
+    counters.forEach(el => countObserver.observe(el));
+</script>
 </body>
 </html>
