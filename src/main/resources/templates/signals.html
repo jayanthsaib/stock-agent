@@ -103,20 +103,95 @@
                                 th:text="${s.expiresAt != null ? #temporals.format(s.expiresAt, 'dd MMM HH:mm') : '—'}">—</td>
                             <td>
                                 <div style="display:flex;gap:6px;align-items:center;">
-                                    <!-- Approve -->
-                                    <form th:action="@{/ui/signals/{id}/approve(id=${s.tradeId})}" method="post" class="d-inline">
-                                        <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
-                                        <button type="submit"
-                                                style="background:#23863622;border:1px solid #23863655;color:#3fb950;font-size:11px;font-weight:700;padding:4px 10px;border-radius:5px;cursor:pointer;white-space:nowrap;">
-                                            <i class="fa-solid fa-check me-1"></i>Approve
-                                        </button>
-                                    </form>
+                                    <!-- Approve → opens order details modal -->
+                                    <button type="button"
+                                            th:onclick="|document.getElementById('approve-${s.tradeId}').style.display='flex'|"
+                                            style="background:#23863622;border:1px solid #23863655;color:#3fb950;font-size:11px;font-weight:700;padding:4px 10px;border-radius:5px;cursor:pointer;white-space:nowrap;">
+                                        <i class="fa-solid fa-check me-1"></i>Approve
+                                    </button>
                                     <!-- Reject -->
                                     <button type="button"
                                             th:onclick="|document.getElementById('reject-${s.tradeId}').style.display='flex'|"
                                             style="background:#da363322;border:1px solid #da363355;color:#f85149;font-size:11px;font-weight:700;padding:4px 10px;border-radius:5px;cursor:pointer;white-space:nowrap;">
                                         <i class="fa-solid fa-xmark me-1"></i>Reject
                                     </button>
+                                </div>
+
+                                <!-- Approve modal — shows order details + broker instruction -->
+                                <div th:id="|approve-${s.tradeId}|"
+                                     style="display:none;position:fixed;inset:0;background:#000b;z-index:9999;align-items:center;justify-content:center;">
+                                    <div style="background:#161b22;border:1px solid #30363d;border-radius:14px;padding:28px;width:420px;max-width:95vw;">
+                                        <!-- Header -->
+                                        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+                                            <div style="font-weight:700;color:#e6edf3;font-size:15px;">
+                                                <i class="fa-solid fa-cart-shopping me-2" style="color:#3fb950;"></i>
+                                                Place This Order
+                                            </div>
+                                            <span style="background:#23863622;border:1px solid #23863655;color:#3fb950;font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;"
+                                                  th:text="${s.signalType}">BUY</span>
+                                        </div>
+
+                                        <!-- Stock info -->
+                                        <div style="background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:14px;margin-bottom:16px;">
+                                            <div style="font-size:20px;font-weight:800;color:#e6edf3;" th:text="${s.symbol}">SYMBOL</div>
+                                            <div style="font-size:11px;color:#8b949e;" th:text="${s.sector ?: s.exchange}">NSE</div>
+                                        </div>
+
+                                        <!-- Order details grid -->
+                                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">
+                                            <div style="background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:12px;">
+                                                <div style="font-size:10px;color:#8b949e;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;">Entry Price</div>
+                                                <div style="font-size:16px;font-weight:700;color:#58a6ff;" th:text="'₹' + ${#numbers.formatDecimal(s.entryPrice,1,2)}">₹0</div>
+                                            </div>
+                                            <div style="background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:12px;">
+                                                <div style="font-size:10px;color:#8b949e;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;">Quantity (approx)</div>
+                                                <div style="font-size:16px;font-weight:700;color:#e6edf3;"
+                                                     th:text="${s.entryPrice > 0 ? #numbers.formatDecimal(s.capitalAllocationInr / s.entryPrice, 1, 0) + ' shares' : '—'}">— shares</div>
+                                            </div>
+                                            <div style="background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:12px;">
+                                                <div style="font-size:10px;color:#8b949e;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;">Target</div>
+                                                <div style="font-size:16px;font-weight:700;color:#3fb950;" th:text="'₹' + ${#numbers.formatDecimal(s.targetPrice,1,2)}">₹0</div>
+                                            </div>
+                                            <div style="background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:12px;">
+                                                <div style="font-size:10px;color:#8b949e;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;">Stop Loss</div>
+                                                <div style="font-size:16px;font-weight:700;color:#f85149;" th:text="'₹' + ${#numbers.formatDecimal(s.stopLossPrice,1,2)}">₹0</div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Capital + R:R -->
+                                        <div style="display:flex;gap:10px;margin-bottom:20px;">
+                                            <div style="flex:1;background:#1f6feb11;border:1px solid #1f6feb33;border-radius:8px;padding:10px;text-align:center;">
+                                                <div style="font-size:10px;color:#8b949e;margin-bottom:3px;">Capital Required</div>
+                                                <div style="font-weight:700;color:#58a6ff;" th:text="'₹' + ${#numbers.formatDecimal(s.capitalAllocationInr,1,0)}">₹0</div>
+                                            </div>
+                                            <div style="flex:1;background:#8957e511;border:1px solid #8957e533;border-radius:8px;padding:10px;text-align:center;">
+                                                <div style="font-size:10px;color:#8b949e;margin-bottom:3px;">Risk:Reward</div>
+                                                <div style="font-weight:700;color:#d2a8ff;" th:text="${#numbers.formatDecimal(s.riskRewardRatio,1,2)} + 'x'">0x</div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Broker instruction -->
+                                        <div style="background:#d2992211;border:1px solid #d2992233;border-radius:8px;padding:12px;margin-bottom:20px;font-size:12px;color:#f0883e;line-height:1.6;">
+                                            <i class="fa-solid fa-triangle-exclamation me-2"></i>
+                                            <strong>Manual execution required.</strong> Open your broker app (Angel One, Zerodha, Groww, etc.) and place this order yourself. Cerebro does not place orders on your behalf.
+                                        </div>
+
+                                        <!-- Buttons -->
+                                        <form th:action="@{/ui/signals/{id}/approve(id=${s.tradeId})}" method="post">
+                                            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+                                            <div style="display:flex;gap:10px;">
+                                                <button type="submit" class="btn flex-fill"
+                                                        style="background:#238636;color:#fff;border:none;padding:10px;border-radius:6px;font-weight:700;font-size:13px;">
+                                                    <i class="fa-solid fa-check me-2"></i>I've noted it — Mark as Approved
+                                                </button>
+                                                <button type="button"
+                                                        th:onclick="|document.getElementById('approve-${s.tradeId}').style.display='none'|"
+                                                        style="background:#21262d;color:#c9d1d9;border:1px solid #30363d;padding:10px 16px;border-radius:6px;font-size:13px;cursor:pointer;">
+                                                    Cancel
+                                                </button>
+                                            </div>
+                                        </form>
+                                    </div>
                                 </div>
 
                                 <!-- Reject reason modal -->

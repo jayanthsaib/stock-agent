@@ -102,7 +102,13 @@ public class DashboardController {
     @PostMapping("/signals/{tradeId}/approve")
     public String approveSignal(@PathVariable String tradeId, RedirectAttributes ra) {
         approvalGateway.approveFromDashboard(tradeId);
-        ra.addFlashAttribute("success", "Signal " + tradeId + " approved.");
+        tradeRepo.findById(tradeId).ifPresent(t -> ra.addFlashAttribute("success",
+            "Signal approved — place this order in your broker: " +
+            t.getSignalType() + " " + t.getSymbol() +
+            " @ ₹" + String.format("%.2f", t.getEntryPrice()) +
+            " | SL: ₹" + String.format("%.2f", t.getStopLossPrice()) +
+            " | Target: ₹" + String.format("%.2f", t.getTargetPrice()) +
+            " | Qty: ~" + (t.getEntryPrice() > 0 ? (int)(t.getCapitalAllocationInr() / t.getEntryPrice()) : 0) + " shares"));
         return "redirect:/ui/signals";
     }
 
