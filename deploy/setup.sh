@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# setup.sh — One-shot bootstrap for AI Stock Trading Agent
+# setup.sh — One-shot bootstrap for Cerebro
 #             Ubuntu 22.04 — Oracle Cloud (A1.Flex) or Google Cloud (e2-micro)
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/jayanthsaib/stock-agent/master/deploy/setup.sh | bash
@@ -20,7 +20,7 @@ error() { echo -e "\e[31m[ERROR]\e[0m $*" >&2; exit 1; }
 # ── 1. Require Linux ──────────────────────────────────────────────────────────
 [[ "$(uname -s)" == "Linux" ]] || error "This script is for Linux only."
 
-info "=== AI Stock Trading Agent — Server Bootstrap ==="
+info "=== Cerebro — Server Bootstrap ==="
 info "Running as user: $CURRENT_USER"
 info "Target directory: $APP_DIR"
 

@@ -1,4 +1,4 @@
-# REST API Reference — AI Stock Trading Agent
+# REST API Reference — Cerebro
 
 Base URL (local): `http://localhost:8080`
 Base URL (production): `http://13.203.216.12:8080`

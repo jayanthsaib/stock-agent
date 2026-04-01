@@ -1,4 +1,4 @@
-# Project Roadmap — AI Stock Trading Agent
+# Project Roadmap — Cerebro
 
 This document captures the full project plan from conception to production, organised
 as a star-rating maturity model. Each tier builds on the previous one.

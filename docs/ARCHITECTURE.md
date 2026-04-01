@@ -1,4 +1,4 @@
-# Architecture — AI Stock Trading Agent
+# Architecture — Cerebro
 
 ## Overview
 

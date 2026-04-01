@@ -1,4 +1,4 @@
-# Trading Strategy — AI Stock Trading Agent
+# Trading Strategy — Cerebro
 
 ## Philosophy
 

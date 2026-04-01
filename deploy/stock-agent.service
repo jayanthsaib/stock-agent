@@ -1,5 +1,5 @@
 [Unit]
-Description=AI Stock Trading Agent
+Description=Cerebro — AI Trading Agent
 After=network.target
 
 [Service]

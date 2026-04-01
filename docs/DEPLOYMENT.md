@@ -1,4 +1,4 @@
-# Deployment Guide — AI Stock Trading Agent
+# Deployment Guide — Cerebro
 
 ## Local Development
 
@@ -144,7 +144,7 @@ on first startup. No manual SQL scripts needed.
 
 ```ini
 [Unit]
-Description=AI Stock Trading Agent
+Description=Cerebro
 After=network.target
 
 [Service]

@@ -35,7 +35,7 @@ public class TelegramService {
     // File used to persist the Telegram update offset across restarts.
     // Prevents re-processing old APPROVE/REJECT messages after a service restart.
     private static final Path OFFSET_FILE =
-        Path.of(System.getProperty("user.home"), ".stock-agent-telegram-offset");
+        Path.of(System.getProperty("user.home"), ".cerebro-telegram-offset");
 
     private final AgentConfig config;
     private final ObjectMapper mapper = new ObjectMapper();

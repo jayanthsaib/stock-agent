@@ -12,10 +12,10 @@
     </parent>
 
     <groupId>com.jay.stagent</groupId>
-    <artifactId>stock-agent</artifactId>
+    <artifactId>cerebro</artifactId>
     <version>1.0-SNAPSHOT</version>
-    <name>AI Stock Trading Agent</name>
-    <description>AI-powered personal trading and investment agent for Indian markets</description>
+    <name>Cerebro</name>
+    <description>Cerebro — AI-powered personal trading and investment agent for Indian markets</description>
 
     <properties>
         <java.version>21</java.version>

@@ -1,6 +1,6 @@
 spring:
   application:
-    name: stock-agent
+    name: cerebro
 
   # ── Database ──────────────────────────────────────────────────────────────
   datasource:
