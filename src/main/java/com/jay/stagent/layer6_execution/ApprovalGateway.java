@@ -161,6 +161,16 @@ public class ApprovalGateway {
         }
     }
 
+    /** Called from the web dashboard APPROVE button. */
+    public void approveFromDashboard(String tradeId) {
+        handleApproval(tradeId);
+    }
+
+    /** Called from the web dashboard REJECT button. */
+    public void rejectFromDashboard(String tradeId, String reason) {
+        handleRejection(tradeId, reason != null ? reason : "Rejected via dashboard");
+    }
+
     private void handleApproval(String tradeId) {
         TradeSignal signal = pendingSignals.remove(tradeId);
         if (signal == null) {

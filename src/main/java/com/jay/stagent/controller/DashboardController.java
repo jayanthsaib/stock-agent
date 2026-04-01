@@ -12,9 +12,8 @@ import com.jay.stagent.repository.TradeRecordRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -98,6 +97,22 @@ public class DashboardController {
         model.addAttribute("fmt",        FMT);
         model.addAttribute("activePage", "signals");
         return "signals";
+    }
+
+    @PostMapping("/signals/{tradeId}/approve")
+    public String approveSignal(@PathVariable String tradeId, RedirectAttributes ra) {
+        approvalGateway.approveFromDashboard(tradeId);
+        ra.addFlashAttribute("success", "Signal " + tradeId + " approved.");
+        return "redirect:/ui/signals";
+    }
+
+    @PostMapping("/signals/{tradeId}/reject")
+    public String rejectSignal(@PathVariable String tradeId,
+                               @RequestParam(defaultValue = "") String reason,
+                               RedirectAttributes ra) {
+        approvalGateway.rejectFromDashboard(tradeId, reason);
+        ra.addFlashAttribute("info", "Signal " + tradeId + " rejected.");
+        return "redirect:/ui/signals";
     }
 
     // ── Analyse ────────────────────────────────────────────────────────────────
