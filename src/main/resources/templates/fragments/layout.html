@@ -226,6 +226,13 @@
         </a>
     </nav>
 
+    <div class="nav-section-label" th:if="${#authentication?.authorities?.toString()?.contains('ROLE_ADMIN')}">Admin</div>
+    <nav class="sidebar-nav" th:if="${#authentication?.authorities?.toString()?.contains('ROLE_ADMIN')}">
+        <a th:href="@{/admin/users}" th:classappend="${active == 'admin-users' ? 'active' : ''}">
+            <i class="fa-solid fa-users-gear"></i> User Management
+        </a>
+    </nav>
+
     <div class="sidebar-footer">
         <div class="d-flex align-items-center justify-content-between mb-2">
             <span style="font-size:12px;color:#8b949e;">

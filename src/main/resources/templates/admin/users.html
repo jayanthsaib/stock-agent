@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head(title='User Management')}"></head>
+<body>
+<div style="display:flex;min-height:100vh;">
+    <div th:replace="~{fragments/layout :: sidebar(active='admin-users')}"></div>
+    <div id="main">
+        <div id="topbar">
+            <span class="page-title"><i class="fa-solid fa-users-gear me-2" style="color:#58a6ff;"></i>User Management</span>
+        </div>
+        <div class="content-area">
+
+            <!-- Flash messages -->
+            <div th:if="${success}" class="alert mb-4 py-2 px-3"
+                 style="background:#23863622;border:1px solid #23863655;color:#3fb950;border-radius:8px;font-size:13px;">
+                <i class="fa-solid fa-circle-check me-2"></i><span th:text="${success}"></span>
+            </div>
+            <div th:if="${error}" class="alert mb-4 py-2 px-3"
+                 style="background:#da363322;border:1px solid #da363355;color:#f85149;border-radius:8px;font-size:13px;">
+                <i class="fa-solid fa-circle-xmark me-2"></i><span th:text="${error}"></span>
+            </div>
+
+            <div class="row g-4">
+
+                <!-- ── Create User ── -->
+                <div class="col-lg-4">
+                    <div class="table-card h-100">
+                        <div class="card-header-bar">
+                            <span><i class="fa-solid fa-user-plus me-2" style="color:#58a6ff;"></i>Create New User</span>
+                        </div>
+                        <div style="padding:20px;">
+                            <form th:action="@{/admin/users/create}" method="post">
+                                <div class="mb-3">
+                                    <label style="font-size:11px;font-weight:600;color:#8b949e;text-transform:uppercase;letter-spacing:.5px;">Username</label>
+                                    <input type="text" name="username" required
+                                           class="form-control mt-1"
+                                           style="background:#0d1117;border:1px solid #30363d;color:#e6edf3;border-radius:6px;padding:9px 12px;font-size:13px;"
+                                           placeholder="e.g. john_doe"/>
+                                </div>
+                                <div class="mb-3">
+                                    <label style="font-size:11px;font-weight:600;color:#8b949e;text-transform:uppercase;letter-spacing:.5px;">Email</label>
+                                    <input type="email" name="email" required
+                                           class="form-control mt-1"
+                                           style="background:#0d1117;border:1px solid #30363d;color:#e6edf3;border-radius:6px;padding:9px 12px;font-size:13px;"
+                                           placeholder="user@example.com"/>
+                                </div>
+                                <div class="mb-3">
+                                    <label style="font-size:11px;font-weight:600;color:#8b949e;text-transform:uppercase;letter-spacing:.5px;">Password</label>
+                                    <input type="password" name="password" required
+                                           class="form-control mt-1"
+                                           style="background:#0d1117;border:1px solid #30363d;color:#e6edf3;border-radius:6px;padding:9px 12px;font-size:13px;"
+                                           placeholder="Min 8 characters"/>
+                                </div>
+                                <div class="mb-4">
+                                    <label style="font-size:11px;font-weight:600;color:#8b949e;text-transform:uppercase;letter-spacing:.5px;">Role</label>
+                                    <select name="role" class="form-select mt-1"
+                                            style="background:#0d1117;border:1px solid #30363d;color:#e6edf3;border-radius:6px;padding:9px 12px;font-size:13px;">
+                                        <option value="USER">USER — Standard access</option>
+                                        <option value="ADMIN">ADMIN — Full access</option>
+                                    </select>
+                                </div>
+                                <button type="submit" class="btn w-100"
+                                        style="background:#238636;color:#fff;border:none;padding:10px;border-radius:6px;font-weight:600;font-size:13px;">
+                                    <i class="fa-solid fa-plus me-2"></i>Create User
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ── Users Table ── -->
+                <div class="col-lg-8">
+                    <div class="table-card">
+                        <div class="card-header-bar">
+                            <span><i class="fa-solid fa-users me-2" style="color:#58a6ff;"></i>All Users</span>
+                            <span style="font-size:12px;color:#8b949e;" th:text="${users.size()} + ' accounts'"></span>
+                        </div>
+                        <div style="overflow-x:auto;">
+                            <table class="table mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>User</th>
+                                        <th>Email</th>
+                                        <th>Role</th>
+                                        <th>Status</th>
+                                        <th>Created</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr th:each="u : ${users}">
+                                        <td>
+                                            <div style="display:flex;align-items:center;gap:8px;">
+                                                <div style="width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#1f6feb,#388bfd);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;"
+                                                     th:text="${u.username.substring(0,1).toUpperCase()}"></div>
+                                                <span style="font-weight:600;color:#e6edf3;" th:text="${u.username}"></span>
+                                            </div>
+                                        </td>
+                                        <td style="color:#8b949e;font-size:12px;" th:text="${u.email}"></td>
+                                        <td>
+                                            <span th:if="${u.role == 'ADMIN'}"
+                                                  style="background:#d2992222;border:1px solid #d2992244;color:#f0883e;font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;letter-spacing:.3px;">
+                                                ADMIN
+                                            </span>
+                                            <span th:if="${u.role == 'USER'}"
+                                                  style="background:#1f6feb22;border:1px solid #1f6feb44;color:#58a6ff;font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;letter-spacing:.3px;">
+                                                USER
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <span th:if="${u.active}"
+                                                  style="background:#23863622;border:1px solid #23863655;color:#3fb950;font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px;">
+                                                <i class="fa-solid fa-circle" style="font-size:7px;margin-right:4px;"></i>Active
+                                            </span>
+                                            <span th:if="${!u.active}"
+                                                  style="background:#30363d;border:1px solid #30363d;color:#8b949e;font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px;">
+                                                <i class="fa-solid fa-circle" style="font-size:7px;margin-right:4px;"></i>Disabled
+                                            </span>
+                                        </td>
+                                        <td style="color:#8b949e;font-size:12px;"
+                                            th:text="${u.createdAt != null ? #temporals.format(u.createdAt, 'dd MMM yyyy') : '-'}"></td>
+                                        <td>
+                                            <div style="display:flex;gap:6px;align-items:center;">
+                                                <!-- Toggle enable/disable -->
+                                                <form th:action="@{/admin/users/{id}/toggle(id=${u.id})}" method="post" class="d-inline">
+                                                    <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+                                                    <button type="submit"
+                                                            th:title="${u.active ? 'Disable user' : 'Enable user'}"
+                                                            style="background:none;border:1px solid #30363d;border-radius:5px;padding:4px 8px;cursor:pointer;font-size:11px;"
+                                                            th:style="${u.active ? 'background:none;border:1px solid #da363355;border-radius:5px;padding:4px 8px;cursor:pointer;font-size:11px;color:#f85149;' : 'background:none;border:1px solid #23863655;border-radius:5px;padding:4px 8px;cursor:pointer;font-size:11px;color:#3fb950;'}">
+                                                        <i th:class="${u.active ? 'fa-solid fa-ban' : 'fa-solid fa-check'}"></i>
+                                                    </button>
+                                                </form>
+
+                                                <!-- Reset password -->
+                                                <button type="button"
+                                                        th:onclick="|document.getElementById('reset-modal-${u.id}').style.display='flex'|"
+                                                        style="background:none;border:1px solid #30363d;border-radius:5px;padding:4px 8px;cursor:pointer;font-size:11px;color:#8b949e;"
+                                                        title="Reset password">
+                                                    <i class="fa-solid fa-key"></i>
+                                                </button>
+
+                                                <!-- Delete (not for admin) -->
+                                                <form th:if="${u.role != 'ADMIN'}"
+                                                      th:action="@{/admin/users/{id}/delete(id=${u.id})}" method="post" class="d-inline"
+                                                      onsubmit="return confirm('Delete this user?')">
+                                                    <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+                                                    <button type="submit"
+                                                            style="background:none;border:1px solid #da363355;border-radius:5px;padding:4px 8px;cursor:pointer;font-size:11px;color:#f85149;"
+                                                            title="Delete user">
+                                                        <i class="fa-solid fa-trash"></i>
+                                                    </button>
+                                                </form>
+                                            </div>
+
+                                            <!-- Reset password modal -->
+                                            <div th:id="|reset-modal-${u.id}|"
+                                                 style="display:none;position:fixed;inset:0;background:#000a;z-index:9999;align-items:center;justify-content:center;">
+                                                <div style="background:#161b22;border:1px solid #30363d;border-radius:12px;padding:24px;width:360px;max-width:90vw;">
+                                                    <div style="font-weight:700;color:#e6edf3;margin-bottom:16px;">
+                                                        <i class="fa-solid fa-key me-2" style="color:#58a6ff;"></i>
+                                                        Reset Password — <span th:text="${u.username}"></span>
+                                                    </div>
+                                                    <form th:action="@{/admin/users/{id}/reset-password(id=${u.id})}" method="post">
+                                                        <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+                                                        <input type="password" name="newPassword" required placeholder="New password"
+                                                               class="form-control mb-3"
+                                                               style="background:#0d1117;border:1px solid #30363d;color:#e6edf3;border-radius:6px;padding:9px 12px;font-size:13px;"/>
+                                                        <div style="display:flex;gap:10px;">
+                                                            <button type="submit" class="btn flex-fill"
+                                                                    style="background:#238636;color:#fff;border:none;padding:8px;border-radius:6px;font-weight:600;font-size:13px;">
+                                                                Reset
+                                                            </button>
+                                                            <button type="button"
+                                                                    th:onclick="|document.getElementById('reset-modal-${u.id}').style.display='none'|"
+                                                                    class="btn flex-fill"
+                                                                    style="background:#21262d;color:#c9d1d9;border:1px solid #30363d;padding:8px;border-radius:6px;font-size:13px;">
+                                                                Cancel
+                                                            </button>
+                                                        </div>
+                                                    </form>
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+</div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+</body>
+</html>

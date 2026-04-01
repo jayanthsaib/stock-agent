@@ -34,6 +34,7 @@ public class SecurityConfig {
                 .requestMatchers("/", "/login", "/logout").permitAll()
                 .requestMatchers("/h2-console/**").permitAll()
                 .requestMatchers("/api/**").permitAll()  // ApiKeyFilter handles /api/* auth
+                .requestMatchers("/admin/**").hasRole("ADMIN")
                 .requestMatchers("/ui/**").authenticated()
                 .anyRequest().permitAll()
             )
