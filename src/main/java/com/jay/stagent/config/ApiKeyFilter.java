@@ -4,10 +4,9 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.lang.NonNull;
-import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
@@ -16,20 +15,19 @@ import java.io.IOException;
  * API Key authentication filter.
  *
  * Protects all /api/* endpoints with a shared secret passed via the
- * X-API-Key request header.  UI pages and the H2 console are excluded.
+ * X-API-Key request header. UI pages and the H2 console are excluded.
  *
- * Set API_KEY in your .env to enable.  If API_KEY is blank (default for
+ * Registered as a bean in SecurityConfig (not @Component) to avoid
+ * double-registration in the Spring Security filter chain.
+ *
+ * Set API_KEY in your .env to enable. If API_KEY is blank (default for
  * local development), the filter is a no-op and all requests pass through.
- *
- * Usage:
- *   curl -H "X-API-Key: your-secret" http://host:8080/api/status
  */
 @Slf4j
-@Component
+@RequiredArgsConstructor
 public class ApiKeyFilter extends OncePerRequestFilter {
 
-    @Value("${API_KEY:}")
-    private String expectedKey;
+    private final String expectedKey;
 
     @Override
     protected void doFilterInternal(

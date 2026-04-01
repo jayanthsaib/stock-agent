@@ -227,8 +227,22 @@
     </nav>
 
     <div class="sidebar-footer">
-        <i class="fa-solid fa-circle-check" style="color:#3fb950;"></i>
-        Agent v1.0 &nbsp;·&nbsp; IST
+        <div class="d-flex align-items-center justify-content-between mb-2">
+            <span style="font-size:12px;color:#8b949e;">
+                <i class="fa-solid fa-user me-1"></i>
+                <span th:text="${#authentication?.name}">admin</span>
+            </span>
+            <form th:action="@{/logout}" method="post" class="d-inline m-0">
+                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+                <button type="submit" style="background:none;border:none;padding:0;color:#8b949e;font-size:11px;cursor:pointer;">
+                    <i class="fa-solid fa-right-from-bracket"></i> Logout
+                </button>
+            </form>
+        </div>
+        <div>
+            <i class="fa-solid fa-circle-check" style="color:#3fb950;"></i>
+            Cerebro v1.0 &nbsp;·&nbsp; IST
+        </div>
     </div>
 </div>
 

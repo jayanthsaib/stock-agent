@@ -2,6 +2,11 @@ spring:
   application:
     name: cerebro
 
+  security:
+    user:
+      name: unused
+      password: unused
+
   # ── Database ──────────────────────────────────────────────────────────────
   datasource:
     url: ${DB_URL:jdbc:h2:file:./data/stockagent;DB_CLOSE_DELAY=-1;AUTO_SERVER=true}
