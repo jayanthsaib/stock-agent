@@ -31,7 +31,7 @@ public class SecurityConfig {
         http
             .addFilterBefore(apiKeyFilter, UsernamePasswordAuthenticationFilter.class)
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/login", "/logout").permitAll()
+                .requestMatchers("/", "/login", "/logout").permitAll()
                 .requestMatchers("/h2-console/**").permitAll()
                 .requestMatchers("/api/**").permitAll()  // ApiKeyFilter handles /api/* auth
                 .requestMatchers("/ui/**").authenticated()

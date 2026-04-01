@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title>Cerebro — AI Trading Agent</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+    <style>
+        :root {
+            --bg-app:    #0d1117;
+            --bg-card:   #161b22;
+            --border:    #30363d;
+            --accent:    #238636;
+            --text-muted:#8b949e;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background: var(--bg-app);
+            color: #c9d1d9;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+
+        /* ── Navbar ── */
+        .navbar {
+            background: rgba(13,17,23,0.95);
+            border-bottom: 1px solid var(--border);
+            padding: 16px 40px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            backdrop-filter: blur(8px);
+        }
+        .navbar-brand {
+            display: flex; align-items: center; gap: 10px;
+            font-size: 20px; font-weight: 700; color: #e6edf3;
+            text-decoration: none;
+        }
+        .btn-login {
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            padding: 8px 22px;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 14px;
+            text-decoration: none;
+            transition: background .2s;
+        }
+        .btn-login:hover { background: #2ea043; color: #fff; }
+
+        /* ── Hero ── */
+        .hero {
+            text-align: center;
+            padding: 100px 20px 80px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .hero-badge {
+            display: inline-flex; align-items: center; gap: 6px;
+            background: #1f6feb22;
+            border: 1px solid #1f6feb55;
+            color: #58a6ff;
+            font-size: 12px; font-weight: 600;
+            padding: 4px 14px; border-radius: 20px;
+            margin-bottom: 28px;
+            letter-spacing: .5px;
+        }
+        .hero h1 {
+            font-size: 56px;
+            font-weight: 800;
+            color: #e6edf3;
+            line-height: 1.1;
+            margin-bottom: 20px;
+            letter-spacing: -1px;
+        }
+        .hero h1 span { color: #58a6ff; }
+        .hero p {
+            font-size: 18px;
+            color: var(--text-muted);
+            line-height: 1.7;
+            margin-bottom: 40px;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .hero-actions {
+            display: flex; align-items: center; justify-content: center; gap: 16px;
+            flex-wrap: wrap;
+        }
+        .btn-hero-primary {
+            background: var(--accent);
+            color: #fff; border: none;
+            padding: 14px 32px; border-radius: 8px;
+            font-size: 16px; font-weight: 700;
+            text-decoration: none;
+            display: inline-flex; align-items: center; gap: 8px;
+            transition: background .2s, transform .15s;
+        }
+        .btn-hero-primary:hover { background: #2ea043; color: #fff; transform: translateY(-1px); }
+        .btn-hero-secondary {
+            background: transparent;
+            color: #c9d1d9;
+            border: 1px solid var(--border);
+            padding: 14px 32px; border-radius: 8px;
+            font-size: 16px; font-weight: 600;
+            text-decoration: none;
+            display: inline-flex; align-items: center; gap: 8px;
+            transition: border-color .2s;
+        }
+        .btn-hero-secondary:hover { border-color: #8b949e; color: #e6edf3; }
+
+        /* ── Stats bar ── */
+        .stats-bar {
+            border-top: 1px solid var(--border);
+            border-bottom: 1px solid var(--border);
+            background: var(--bg-card);
+            display: flex; justify-content: center;
+            flex-wrap: wrap;
+            padding: 28px 40px;
+            gap: 48px;
+        }
+        .stat-item { text-align: center; }
+        .stat-item .num {
+            font-size: 28px; font-weight: 700; color: #e6edf3;
+        }
+        .stat-item .lbl {
+            font-size: 12px; color: var(--text-muted); margin-top: 4px;
+        }
+
+        /* ── Features ── */
+        .features {
+            max-width: 1100px;
+            margin: 80px auto;
+            padding: 0 24px;
+        }
+        .section-title {
+            text-align: center;
+            font-size: 32px; font-weight: 700; color: #e6edf3;
+            margin-bottom: 12px;
+        }
+        .section-sub {
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 16px;
+            margin-bottom: 56px;
+        }
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        .feature-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 28px;
+            transition: border-color .2s, transform .2s;
+        }
+        .feature-card:hover { border-color: #58a6ff55; transform: translateY(-2px); }
+        .feature-icon {
+            width: 44px; height: 44px;
+            border-radius: 10px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 20px;
+            margin-bottom: 16px;
+        }
+        .feature-card h3 {
+            font-size: 16px; font-weight: 700; color: #e6edf3;
+            margin-bottom: 8px;
+        }
+        .feature-card p {
+            font-size: 13.5px; color: var(--text-muted); line-height: 1.6;
+        }
+
+        /* ── How it works ── */
+        .how-it-works {
+            background: var(--bg-card);
+            border-top: 1px solid var(--border);
+            border-bottom: 1px solid var(--border);
+            padding: 80px 24px;
+        }
+        .steps {
+            max-width: 900px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 32px;
+        }
+        .step { text-align: center; }
+        .step-num {
+            width: 48px; height: 48px;
+            border-radius: 50%;
+            background: #1f6feb22;
+            border: 2px solid #1f6feb55;
+            color: #58a6ff;
+            font-size: 18px; font-weight: 700;
+            display: flex; align-items: center; justify-content: center;
+            margin: 0 auto 16px;
+        }
+        .step h4 { font-size: 15px; font-weight: 600; color: #e6edf3; margin-bottom: 8px; }
+        .step p  { font-size: 13px; color: var(--text-muted); line-height: 1.5; }
+
+        /* ── CTA ── */
+        .cta {
+            text-align: center;
+            padding: 80px 24px;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        .cta h2 { font-size: 36px; font-weight: 700; color: #e6edf3; margin-bottom: 16px; }
+        .cta p  { color: var(--text-muted); font-size: 16px; margin-bottom: 36px; }
+
+        /* ── Footer ── */
+        footer {
+            border-top: 1px solid var(--border);
+            text-align: center;
+            padding: 24px;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+    </style>
+</head>
+<body>
+
+<!-- Navbar -->
+<nav class="navbar">
+    <a href="/" class="navbar-brand">
+        <i class="fa-solid fa-robot" style="color:#58a6ff;font-size:22px;"></i>
+        Cerebro
+    </a>
+    <a th:href="@{/login}" class="btn-login">
+        <i class="fa-solid fa-right-to-bracket me-1"></i> Sign In
+    </a>
+</nav>
+
+<!-- Hero -->
+<section class="hero">
+    <div class="hero-badge">
+        <i class="fa-solid fa-circle" style="font-size:8px;color:#3fb950;"></i>
+        Live on NSE &nbsp;·&nbsp; Paper Trading Mode
+    </div>
+    <h1>Your <span>AI-Powered</span><br/>Trading Agent</h1>
+    <p>Cerebro scans 500+ NSE stocks daily, generates high-conviction trade signals, validates every risk rule, and waits for your approval before executing — all autonomously.</p>
+    <div class="hero-actions">
+        <a th:href="@{/login}" class="btn-hero-primary">
+            <i class="fa-solid fa-right-to-bracket"></i> Go to Dashboard
+        </a>
+        <a href="https://github.com/jayanthsaib/stock-agent" target="_blank" class="btn-hero-secondary">
+            <i class="fa-brands fa-github"></i> View on GitHub
+        </a>
+    </div>
+</section>
+
+<!-- Stats bar -->
+<div class="stats-bar">
+    <div class="stat-item">
+        <div class="num">500+</div>
+        <div class="lbl">NSE Stocks Scanned Daily</div>
+    </div>
+    <div class="stat-item">
+        <div class="num">15+</div>
+        <div class="lbl">Hard Risk Rules</div>
+    </div>
+    <div class="stat-item">
+        <div class="num">7</div>
+        <div class="lbl">Analysis Layers</div>
+    </div>
+    <div class="stat-item">
+        <div class="num">24/7</div>
+        <div class="lbl">Always Running on AWS</div>
+    </div>
+</div>
+
+<!-- Features -->
+<section class="features">
+    <div class="section-title">Everything you need to trade smarter</div>
+    <div class="section-sub">From data to execution — fully automated, fully transparent</div>
+    <div class="features-grid">
+
+        <div class="feature-card">
+            <div class="feature-icon" style="background:#1f6feb22;color:#58a6ff;">
+                <i class="fa-solid fa-brain"></i>
+            </div>
+            <h3>AI Signal Generation</h3>
+            <p>Combines fundamental analysis, technical indicators, and macro context to score every stock with a confidence rating before sending a signal.</p>
+        </div>
+
+        <div class="feature-card">
+            <div class="feature-icon" style="background:#23863622;color:#3fb950;">
+                <i class="fa-solid fa-shield-halved"></i>
+            </div>
+            <h3>15+ Risk Rules</h3>
+            <p>Every signal passes through hard risk validation — position sizing, drawdown limits, sector concentration, R:R ratio, and more. No signal skips this.</p>
+        </div>
+
+        <div class="feature-card">
+            <div class="feature-icon" style="background:#d2992222;color:#f0883e;">
+                <i class="fa-brands fa-telegram"></i>
+            </div>
+            <h3>Telegram Approval</h3>
+            <p>Receive every trade signal on Telegram with a full breakdown. Reply APPROVE or REJECT — you're always in control before any trade is placed.</p>
+        </div>
+
+        <div class="feature-card">
+            <div class="feature-icon" style="background:#da363322;color:#f85149;">
+                <i class="fa-solid fa-chart-line"></i>
+            </div>
+            <h3>Live Portfolio Monitor</h3>
+            <p>Track open positions every 15 minutes with live prices, unrealised P&L, stop-loss monitoring, and automatic exit signals when targets are hit.</p>
+        </div>
+
+        <div class="feature-card">
+            <div class="feature-icon" style="background:#8957e522;color:#d2a8ff;">
+                <i class="fa-solid fa-flask"></i>
+            </div>
+            <h3>Backtesting Engine</h3>
+            <p>Test any strategy against historical OHLCV data. See win rate, average return, max drawdown, and Sharpe ratio before going live.</p>
+        </div>
+
+        <div class="feature-card">
+            <div class="feature-icon" style="background:#1f6feb22;color:#58a6ff;">
+                <i class="fa-solid fa-rotate"></i>
+            </div>
+            <h3>Self-Learning</h3>
+            <p>Monthly learning reviews analyse past trades — what worked, what didn't — and adjust signal weights automatically to improve over time.</p>
+        </div>
+
+    </div>
+</section>
+
+<!-- How it works -->
+<section class="how-it-works">
+    <div class="section-title">How Cerebro Works</div>
+    <div class="section-sub" style="margin-bottom:48px;">Four steps from raw data to executed trade</div>
+    <div class="steps">
+        <div class="step">
+            <div class="step-num">1</div>
+            <h4>Scan</h4>
+            <p>Phase 1+2 data ingestion scans 500+ NSE stocks — price filters, volume filters, 1-year OHLCV history.</p>
+        </div>
+        <div class="step">
+            <div class="step-num">2</div>
+            <h4>Analyse</h4>
+            <p>Fundamental, technical, and macro modules score each stock in parallel. Only high-conviction candidates proceed.</p>
+        </div>
+        <div class="step">
+            <div class="step-num">3</div>
+            <h4>Validate</h4>
+            <p>15+ hard risk rules filter out bad setups. Entry, target, stop-loss, and position size are calculated automatically.</p>
+        </div>
+        <div class="step">
+            <div class="step-num">4</div>
+            <h4>Execute</h4>
+            <p>You approve or reject on Telegram. Approved signals are placed as paper or live orders via Angel One SmartAPI.</p>
+        </div>
+    </div>
+</section>
+
+<!-- CTA -->
+<section class="cta">
+    <h2>Ready to let AI trade for you?</h2>
+    <p>Sign in to your Cerebro dashboard and see what the market looks like today.</p>
+    <a th:href="@{/login}" class="btn-hero-primary" style="font-size:15px;padding:14px 40px;">
+        <i class="fa-solid fa-right-to-bracket"></i> Sign In to Dashboard
+    </a>
+</section>
+
+<!-- Footer -->
+<footer>
+    &copy; 2026 Cerebro &nbsp;·&nbsp; Built on AWS &nbsp;·&nbsp; NSE India &nbsp;·&nbsp;
+    <a href="https://github.com/jayanthsaib/stock-agent" target="_blank" style="color:var(--text-muted);">GitHub</a>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
