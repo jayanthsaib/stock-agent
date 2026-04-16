@@ -52,6 +52,9 @@ public class TradeRecord {
     private String exitReason;
     private boolean targetHit;
 
+    // Intraday flag — same-day exit required
+    private boolean intraday;
+
     // Approval metadata
     private String rejectionReason;
     private String brokerOrderId;

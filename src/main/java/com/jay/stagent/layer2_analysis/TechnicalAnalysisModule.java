@@ -15,10 +15,15 @@ import org.ta4j.core.indicators.helpers.ClosePriceIndicator;
 import org.ta4j.core.indicators.helpers.VolumeIndicator;
 import org.ta4j.core.num.DecimalNum;
 
+import java.time.DayOfWeek;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
+import java.time.temporal.IsoFields;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 
 /**
  * Layer 2 — Technical Analysis Module.
@@ -178,6 +183,84 @@ public class TechnicalAnalysisModule {
         int start = Math.max(0, bars.size() - lookback);
         return bars.subList(start, bars.size()).stream()
             .mapToDouble(OHLCVBar::getHigh).max().orElse(0);
+    }
+
+    /**
+     * Weekly trend confirmation — derived from daily bars, no extra API call.
+     * Requires the weekly price to be above the 20-week SMA and weekly RSI not collapsing.
+     * Returns true if the weekly timeframe confirms a bullish setup.
+     */
+    public record WeeklyConfirmation(boolean confirmed, String reason) {}
+
+    public WeeklyConfirmation analyseWeeklyTrend(String symbol, List<OHLCVBar> dailyBars) {
+        List<OHLCVBar> weekly = aggregateToWeekly(dailyBars);
+        if (weekly.size() < 20) {
+            return new WeeklyConfirmation(true, "Insufficient weekly data — skipping filter");
+        }
+
+        BarSeries series = buildSeries(symbol + "_weekly", weekly);
+        int last = series.getEndIndex();
+        ClosePriceIndicator close = new ClosePriceIndicator(series);
+
+        SMAIndicator sma20w = new SMAIndicator(close, Math.min(20, weekly.size()));
+        RSIIndicator  rsi14w = new RSIIndicator(close, Math.min(14, weekly.size() - 1));
+
+        double price   = close.getValue(last).doubleValue();
+        double sma20wV = sma20w.getValue(last).doubleValue();
+        double rsiW    = rsi14w.getValue(last).doubleValue();
+
+        // Weekly RSI collapsing: compare to 2 weeks ago
+        double rsiWPrev = last >= 2 ? rsi14w.getValue(last - 2).doubleValue() : rsiW;
+        boolean rsiCollapsing = rsiW < 40 && rsiW < rsiWPrev - 5;
+
+        boolean aboveWeeklySma = price >= sma20wV;
+
+        if (!aboveWeeklySma && rsiCollapsing) {
+            return new WeeklyConfirmation(false,
+                String.format("Weekly: price below 20w SMA (%.0f vs %.0f) + RSI collapsing (%.0f) — bearish",
+                    price, sma20wV, rsiW));
+        }
+        if (!aboveWeeklySma) {
+            return new WeeklyConfirmation(false,
+                String.format("Weekly: price below 20w SMA (%.0f vs %.0f) — downtrend",
+                    price, sma20wV));
+        }
+        if (rsiCollapsing) {
+            return new WeeklyConfirmation(false,
+                String.format("Weekly RSI collapsing (%.0f) — momentum failing", rsiW));
+        }
+
+        return new WeeklyConfirmation(true,
+            String.format("Weekly confirmed: above 20w SMA, RSI=%.0f", rsiW));
+    }
+
+    /**
+     * Aggregates daily OHLCV bars into weekly bars (Mon open → Fri close).
+     */
+    private List<OHLCVBar> aggregateToWeekly(List<OHLCVBar> daily) {
+        // Key: "YYYY-WW" (ISO year + week number)
+        TreeMap<String, List<OHLCVBar>> byWeek = new TreeMap<>();
+        for (OHLCVBar bar : daily) {
+            int year = bar.getTimestamp().get(IsoFields.WEEK_BASED_YEAR);
+            int week = bar.getTimestamp().get(IsoFields.WEEK_OF_WEEK_BASED_YEAR);
+            String key = String.format("%04d-%02d", year, week);
+            byWeek.computeIfAbsent(key, k -> new ArrayList<>()).add(bar);
+        }
+
+        List<OHLCVBar> weekly = new ArrayList<>();
+        for (Map.Entry<String, List<OHLCVBar>> entry : byWeek.entrySet()) {
+            List<OHLCVBar> week = entry.getValue();
+            double open   = week.get(0).getOpen();
+            double close  = week.get(week.size() - 1).getClose();
+            double high   = week.stream().mapToDouble(OHLCVBar::getHigh).max().orElse(close);
+            double low    = week.stream().mapToDouble(OHLCVBar::getLow).min().orElse(close);
+            long   volume = week.stream().mapToLong(OHLCVBar::getVolume).sum();
+            weekly.add(OHLCVBar.builder()
+                .timestamp(week.get(week.size() - 1).getTimestamp())
+                .open(open).high(high).low(low).close(close).volume(volume)
+                .build());
+        }
+        return weekly;
     }
 
     /**

@@ -54,6 +54,7 @@ public class AgentConfig {
     private Broker broker = new Broker();
     private Telegram telegram = new Telegram();
     private PaperTrading paperTrading = new PaperTrading();
+    private Intraday intraday = new Intraday();
     private List<String> watchlist = List.of();
     private List<String> marketHolidays = List.of();
 
@@ -84,6 +85,7 @@ public class AgentConfig {
             this.broker          = root.getBroker();
             this.telegram        = root.getTelegram();
             this.paperTrading    = root.getPaperTrading();
+            this.intraday        = root.getIntraday() != null ? root.getIntraday() : new Intraday();
 
             // Resolve ${VAR:default} placeholders that Jackson reads as literal strings
             this.broker.setApiKey(resolve(this.broker.getApiKey()));
@@ -114,6 +116,7 @@ public class AgentConfig {
     public Broker broker()                 { return broker; }
     public Telegram telegram()             { return telegram; }
     public PaperTrading paperTrading()     { return paperTrading; }
+    public Intraday intraday()             { return intraday; }
     public List<String> watchlist()        { return watchlist; }
     public List<String> marketHolidays()   { return marketHolidays; }
 
@@ -133,6 +136,7 @@ public class AgentConfig {
         private Broker broker = new Broker();
         private Telegram telegram = new Telegram();
         private PaperTrading paperTrading = new PaperTrading();
+        private Intraday intraday = new Intraday();
         private List<String> watchlist;
         private List<String> marketHolidays;
     }
@@ -208,6 +212,7 @@ public class AgentConfig {
         private double vixCautionThreshold = 20;
         private double vixFavorableThreshold = 15;
         private int fiiSellingDaysThreshold = 10;
+        private double bearMarketDmaThresholdPct = 10; // suppress if Nifty > this % below 200 DMA
     }
 
     @Data public static class Execution {
@@ -234,5 +239,14 @@ public class AgentConfig {
     @Data public static class PaperTrading {
         private boolean enabled = true;
         private double virtualBalanceInr = 500000;
+    }
+
+    @Data public static class Intraday {
+        private boolean enabled = true;
+        private double stopLossPct = 0.8;
+        private double targetPct = 1.8;
+        private double minConfidence = 75;
+        private double maxCapitalPerTradeInr = 20000;
+        private String squareOffTime = "15:15";
     }
 }

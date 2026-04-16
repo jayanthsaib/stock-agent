@@ -161,8 +161,8 @@ public class TradingScheduler {
     }
 
     // ── Intraday Signals (every 30 min, 10:00–14:30 IST) ─────────────────────
-    // Refreshes live prices and generates new signals; dedup prevents re-alerting
-    // the same stock that was already signaled at 09:15 or an earlier intraday run.
+    // Refreshes live prices and generates intraday signals with tight SL/target.
+    // Dedup prevents re-alerting the same symbol twice within the same run type.
 
     @Scheduled(cron = "0 0/30 10-14 * * MON-FRI", zone = "Asia/Kolkata")
     public void intradaySignals() {
@@ -172,7 +172,7 @@ public class TradingScheduler {
         try {
             dataIngestionEngine.refreshLivePrices(); // fast ~1–2 min Phase 1 refresh
             List<TradeRecord> openPositions = tradeRepo.findByStatus("EXECUTED");
-            List<TradeSignal> signals = signalGenerator.generateSignals();
+            List<TradeSignal> signals = signalGenerator.generateIntradaySignals();
 
             int submitted = 0;
             for (TradeSignal signal : signals) {
@@ -186,6 +186,42 @@ public class TradingScheduler {
             log.info("Intraday run: {} new signals submitted to Telegram", submitted);
         } catch (Exception e) {
             log.error("Intraday signal generation failed: {}", e.getMessage(), e);
+        }
+    }
+
+    // ── Intraday Square-Off Alert (15:15 IST) ────────────────────────────────
+    // Sends a Telegram alert to close all open intraday positions before market close.
+
+    @Scheduled(cron = "0 15 15 * * MON-FRI", zone = "Asia/Kolkata")
+    public void intradaySquareOff() {
+        if (!marketCalendar.isMarketOpen()) return;
+        log.info("=== INTRADAY SQUARE-OFF ALERT (15:15) ===");
+        try {
+            java.time.LocalDateTime todayStart = java.time.LocalDateTime.now()
+                .withHour(0).withMinute(0).withSecond(0).withNano(0);
+
+            List<TradeRecord> openIntraday = tradeRepo.findByStatus("EXECUTED").stream()
+                .filter(TradeRecord::isIntraday)
+                .filter(t -> t.getExecutedAt() != null && t.getExecutedAt().isAfter(todayStart))
+                .toList();
+
+            if (openIntraday.isEmpty()) {
+                log.info("No open intraday positions to square off today");
+                return;
+            }
+
+            StringBuilder sb = new StringBuilder();
+            sb.append("⚡ <b>INTRADAY SQUARE-OFF ALERT — 15:15</b>\n");
+            sb.append("Market closes in 15 minutes. Exit the following positions NOW:\n\n");
+            for (TradeRecord t : openIntraday) {
+                sb.append(String.format("• <b>%s</b> — Entry: ₹%.2f | Target: ₹%.2f | SL: ₹%.2f%n",
+                    t.getSymbol(), t.getEntryPrice(), t.getTargetPrice(), t.getStopLossPrice()));
+            }
+            sb.append("\n⚠️ Do NOT carry intraday positions overnight.");
+            telegramService.sendMessage(sb.toString());
+            log.info("Square-off alert sent for {} intraday position(s)", openIntraday.size());
+        } catch (Exception e) {
+            log.error("Intraday square-off alert failed: {}", e.getMessage());
         }
     }
 

@@ -55,6 +55,9 @@ public class TradeSignal {
     // Sector
     private String sector;
 
+    // Intraday flag — same-day exit required; tighter SL/target applied
+    private boolean intraday;
+
     // Lifecycle
     @Builder.Default
     private SignalStatus status = SignalStatus.PENDING_APPROVAL;

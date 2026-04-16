@@ -71,6 +71,7 @@ public class ApprovalGateway {
             .symbol(record.getSymbol())
             .exchange(record.getExchange())
             .sector(record.getSector())
+            .intraday(record.isIntraday())
             .signalType(record.getSignalType() != null
                 ? SignalType.valueOf(record.getSignalType()) : SignalType.BUY)
             .entryPrice(record.getEntryPrice())
@@ -236,6 +237,7 @@ public class ApprovalGateway {
                 .riskRewardScore(cs.getRiskRewardScore())
                 .generatedAt(signal.getGeneratedAt())
                 .expiresAt(signal.getExpiresAt())
+                .intraday(signal.isIntraday())
                 .fundamentalSummary(truncate(signal.getFundamentalSummary(), 500))
                 .technicalSummary(truncate(signal.getTechnicalSummary(), 500))
                 .macroContext(truncate(signal.getMacroContext(), 300))

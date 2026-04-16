@@ -488,8 +488,22 @@ public class DataIngestionEngine {
 
             double indiaVix = fetchIndiaVix();
             MarketRegime regime = determineRegime(indiaVix, niftyPrice, nifty200dma);
-            boolean newBuysSuppressed = indiaVix > config.macro().getVixNoBuysThreshold()
-                || niftyPrice < nifty200dma * 0.95;
+
+            // In paper trading mode, never suppress — observe signals regardless of market
+            boolean newBuysSuppressed;
+            if (config.paperTrading().isEnabled()) {
+                newBuysSuppressed = false;
+                if (indiaVix > config.macro().getVixNoBuysThreshold()
+                        || (nifty200dma > 0 && niftyPrice < nifty200dma * (1 - config.macro().getBearMarketDmaThresholdPct() / 100))) {
+                    log.warn("Macro suppression conditions met (VIX={} Nifty/200dma={:.1f}%) but PAPER TRADING mode — signals allowed",
+                        indiaVix, pctAboveDma);
+                }
+            } else {
+                double bearThreshold = config.macro().getBearMarketDmaThresholdPct();
+                boolean bearMarket = bearThreshold > 0 && nifty200dma > 0
+                    && niftyPrice < nifty200dma * (1 - bearThreshold / 100);
+                newBuysSuppressed = indiaVix > config.macro().getVixNoBuysThreshold() || bearMarket;
+            }
 
             this.latestMacroData = MacroData.builder()
                 .date(LocalDate.now())
@@ -516,11 +530,35 @@ public class DataIngestionEngine {
     }
 
     private double fetchIndiaVix() {
+        // Fetch India VIX from Yahoo Finance (%5EINDIAVIX = ^INDIAVIX)
+        String url = "https://query1.finance.yahoo.com/v8/finance/chart/%5EINDIAVIX?interval=1d&range=5d";
         try {
-            var vixData = angelOneClient.getHistoricalData("26000", "NSE", "ONE_DAY",
-                LocalDateTime.now().minusDays(5).format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")),
-                LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")));
-        } catch (Exception ignored) {}
+            Request request = new Request.Builder()
+                .url(url)
+                .addHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+                .addHeader("Accept", "application/json")
+                .get().build();
+            try (Response response = yahooClient.newCall(request).execute()) {
+                if (!response.isSuccessful() || response.body() == null) {
+                    log.warn("India VIX fetch failed: HTTP {} — defaulting to 15.0", response.code());
+                    return 15.0;
+                }
+                JsonNode root = objectMapper.readTree(response.body().string());
+                JsonNode closes = root.path("chart").path("result").path(0)
+                    .path("indicators").path("quote").path(0).path("close");
+                // Walk backwards to find the latest non-null close
+                for (int i = closes.size() - 1; i >= 0; i--) {
+                    JsonNode val = closes.get(i);
+                    if (!val.isNull() && val.asDouble(0) > 0) {
+                        double vix = val.asDouble();
+                        log.info("India VIX fetched from Yahoo: {}", vix);
+                        return vix;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("India VIX fetch failed: {} — defaulting to 15.0", e.getMessage());
+        }
         return 15.0;
     }
 

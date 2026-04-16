@@ -73,9 +73,14 @@
                                 <i class="fa-solid fa-check-circle me-2"></i>No pending signals
                             </td>
                         </tr>
-                        <tr th:each="s : ${pending}" style="border-left:3px solid #d29922;">
+                        <tr th:each="s : ${pending}"
+                            th:style="${s.intraday} ? 'border-left:3px solid #58a6ff;' : 'border-left:3px solid #d29922;'">
                             <td>
                                 <strong th:text="${s.symbol}">RELIANCE</strong>
+                                <span th:if="${s.intraday}"
+                                      style="background:#1f6feb33;border:1px solid #1f6feb66;color:#58a6ff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:3px;letter-spacing:.4px;margin-left:4px;">
+                                    INTRADAY
+                                </span>
                                 <span class="d-block text-muted" style="font-size:11px;" th:text="${s.exchange}">NSE</span>
                             </td>
                             <td>
@@ -133,8 +138,20 @@
 
                                         <!-- Stock info -->
                                         <div style="background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:14px;margin-bottom:16px;">
-                                            <div style="font-size:20px;font-weight:800;color:#e6edf3;" th:text="${s.symbol}">SYMBOL</div>
+                                            <div style="display:flex;align-items:center;gap:8px;">
+                                                <div style="font-size:20px;font-weight:800;color:#e6edf3;" th:text="${s.symbol}">SYMBOL</div>
+                                                <span th:if="${s.intraday}"
+                                                      style="background:#1f6feb33;border:1px solid #1f6feb66;color:#58a6ff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;letter-spacing:.4px;">
+                                                    INTRADAY
+                                                </span>
+                                            </div>
                                             <div style="font-size:11px;color:#8b949e;" th:text="${s.sector ?: s.exchange}">NSE</div>
+                                            <div th:if="${s.intraday}"
+                                                 style="margin-top:6px;font-size:11px;color:#f0883e;">
+                                                <i class="fa-solid fa-triangle-exclamation me-1"></i>
+                                                Intraday trade — must be squared off by
+                                                <strong th:text="${s.expiresAt != null ? #temporals.format(s.expiresAt,'HH:mm') : '15:15'}">15:15</strong> today.
+                                            </div>
                                         </div>
 
                                         <!-- Order details grid -->
@@ -260,6 +277,10 @@
                         <tr th:each="s : ${history}">
                             <td>
                                 <strong th:text="${s.symbol}">RELIANCE</strong>
+                                <span th:if="${s.intraday}"
+                                      style="background:#1f6feb33;border:1px solid #1f6feb66;color:#58a6ff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:3px;letter-spacing:.4px;margin-left:4px;">
+                                    INTRADAY
+                                </span>
                                 <span class="d-block text-muted" style="font-size:11px;" th:text="${s.exchange}">NSE</span>
                             </td>
                             <td>

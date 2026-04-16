@@ -62,7 +62,24 @@ public class SignalGenerator {
      * Symbols already signaled today are excluded to prevent duplicate Telegram alerts.
      */
     public List<TradeSignal> generateSignals() {
-        log.info("SignalGenerator: starting analysis across full equity universe");
+        return generateSignals(false);
+    }
+
+    /**
+     * Intraday variant: tighter SL/target, higher confidence bar, same-day exit.
+     * Only runs if intraday mode is enabled in config.
+     */
+    public List<TradeSignal> generateIntradaySignals() {
+        if (!config.intraday().isEnabled()) {
+            log.info("Intraday mode disabled — skipping intraday signal generation");
+            return List.of();
+        }
+        return generateSignals(true);
+    }
+
+    private List<TradeSignal> generateSignals(boolean intradayRun) {
+        log.info("SignalGenerator: starting {} analysis across full equity universe",
+            intradayRun ? "INTRADAY" : "swing");
 
         MacroData macro = dataEngine.getMacroData();
 
@@ -79,20 +96,26 @@ public class SignalGenerator {
         // Run analysis for each stock in parallel using virtual threads
         List<CompletableFuture<TradeSignal>> futures = allStockData.stream()
             .map(stockData -> CompletableFuture.supplyAsync(
-                () -> analyseStock(stockData, macro, macroResult), executor))
+                () -> analyseStock(stockData, macro, macroResult, intradayRun), executor))
             .toList();
 
         // Reset dedup if date rolled over (safety net for long-running service)
         if (!LocalDate.now().equals(signaledDate)) resetDailySignals();
 
+        double minConfidence = intradayRun
+            ? config.intraday().getMinConfidence()
+            : config.signal().getMinConfidenceToNotify();
+
         for (CompletableFuture<TradeSignal> future : futures) {
             try {
                 TradeSignal signal = future.get();
                 if (signal != null) {
-                    if (signaledSymbolsToday.contains(signal.getSymbol())) {
-                        log.debug("Skipping duplicate signal for {} — already sent today", signal.getSymbol());
+                    String dedupKey = signal.getSymbol() + (intradayRun ? ":intraday" : ":swing");
+                    if (signaledSymbolsToday.contains(dedupKey)) {
+                        log.debug("Skipping duplicate {} signal for {} — already sent today",
+                            intradayRun ? "intraday" : "swing", signal.getSymbol());
                     } else {
-                        signaledSymbolsToday.add(signal.getSymbol());
+                        signaledSymbolsToday.add(dedupKey);
                         signals.add(signal);
                     }
                 }
@@ -101,15 +124,16 @@ public class SignalGenerator {
             }
         }
 
-        log.info("SignalGenerator: generated {} signals above threshold {:.0f}%",
-            signals.size(), config.signal().getMinConfidenceToNotify());
+        log.info("SignalGenerator: generated {} {} signals above threshold {:.0f}%",
+            signals.size(), intradayRun ? "intraday" : "swing", minConfidence);
         return signals;
     }
 
     // ── Per-Stock Analysis ────────────────────────────────────────────────────
 
     private TradeSignal analyseStock(StockData stock, MacroData macro,
-                                     MacroContextModule.MacroResult macroResult) {
+                                     MacroContextModule.MacroResult macroResult,
+                                     boolean intradayRun) {
         String symbol = stock.getSymbol();
         try {
             // Run fundamental + technical analysis in parallel
@@ -121,11 +145,25 @@ public class SignalGenerator {
             var fundamentalResult = fundamentalFuture.get();
             var technicalResult   = technicalFuture.get();
 
+            // ── Multi-timeframe confirmation (skip for intraday — already short window) ──
+            if (!intradayRun && stock.getHistoricalBars() != null) {
+                TechnicalAnalysisModule.WeeklyConfirmation weekly =
+                    technicalModule.analyseWeeklyTrend(symbol, stock.getHistoricalBars());
+                if (!weekly.confirmed()) {
+                    log.debug("{} rejected by weekly timeframe: {}", symbol, weekly.reason());
+                    return null;
+                }
+            }
+
             // Build confidence score
+            // For intraday: macro is irrelevant (same-day trade) — use neutral macro score
+            double macroScore = intradayRun
+                ? 50.0
+                : Math.max(0, macroResult.score() - macroResult.confidencePenalty());
             ConfidenceScore score = ConfidenceScore.builder()
                 .fundamentalScore(fundamentalResult.score())
                 .technicalScore(technicalResult.score())
-                .macroScore(Math.max(0, macroResult.score() - macroResult.confidencePenalty()))
+                .macroScore(macroScore)
                 .riskRewardScore(0) // Will be set after computing SL/target
                 .fundamentalReason(fundamentalResult.summary())
                 .technicalReason(technicalResult.summary())
@@ -139,10 +177,18 @@ public class SignalGenerator {
             }
 
             // Compute entry, SL, target from technical levels
-            double entryPrice  = stock.getLtp();
-            double stopLoss    = computeStopLoss(entryPrice, technicalResult.supportLevel());
-            double target      = computeTarget(entryPrice, technicalResult.resistanceLevel());
-            double rrRatio     = computeRR(entryPrice, stopLoss, target);
+            double entryPrice = stock.getLtp();
+            double stopLoss, target;
+            if (intradayRun) {
+                // Intraday: fixed % SL/target from config — ignore technical support/resistance
+                AgentConfig.Intraday intraday = config.intraday();
+                stopLoss = entryPrice * (1 - intraday.getStopLossPct() / 100);
+                target   = entryPrice * (1 + intraday.getTargetPct() / 100);
+            } else {
+                stopLoss = computeStopLoss(entryPrice, technicalResult.supportLevel());
+                target   = computeTarget(entryPrice, technicalResult.resistanceLevel());
+            }
+            double rrRatio = computeRR(entryPrice, stopLoss, target);
 
             // Hard reject: R:R below configured minimum
             if (rrRatio < config.risk().getMinRiskRewardRatio()) {
@@ -157,21 +203,50 @@ public class SignalGenerator {
             score.setRiskRewardReason(String.format("R:R = 1:%.1f", rrRatio));
             score.calculate(config.weights());
 
-            // Filter by minimum confidence
-            if (score.getComposite() < config.signal().getMinConfidenceToNotify()) {
-                log.debug("{} below threshold: score={:.1f}", symbol, score.getComposite());
+            // Filter by minimum confidence (intraday has higher bar)
+            double minConfidence = intradayRun
+                ? config.intraday().getMinConfidence()
+                : config.signal().getMinConfidenceToNotify();
+            if (score.getComposite() < minConfidence) {
+                log.debug("{} below {} threshold: score={:.1f}", symbol,
+                    intradayRun ? "intraday" : "swing", score.getComposite());
                 return null;
             }
 
-            // Capital allocation — use live wallet value, not hardcoded config
+            // Capital allocation
             double totalPortfolio = portfolioValueService.getPortfolioValue();
-            double allocationPct  = config.positionSizing().getMaxSingleStockPct() / 100.0;
-            double allocationInr  = totalPortfolio * allocationPct;
+            double allocationInr;
+            double allocationPct;
+            if (intradayRun) {
+                // Intraday: capped at configured max, never more than standard swing allocation
+                double swingMax = totalPortfolio * config.positionSizing().getMaxSingleStockPct() / 100.0;
+                allocationInr = Math.min(config.intraday().getMaxCapitalPerTradeInr(), swingMax);
+                allocationPct = allocationInr / totalPortfolio * 100;
+            } else {
+                allocationPct = config.positionSizing().getMaxSingleStockPct();
+                allocationInr = totalPortfolio * allocationPct / 100.0;
+            }
 
             double postTradeCash = totalPortfolio
                 - (totalPortfolio * config.portfolio().getEmergencyCashBufferPct() / 100)
                 - allocationInr;
             boolean cashBufferSafe = postTradeCash >= 0;
+
+            // Intraday signals expire at square-off time same day
+            LocalDateTime expiresAt;
+            if (intradayRun) {
+                String[] parts = config.intraday().getSquareOffTime().split(":");
+                expiresAt = LocalDateTime.now()
+                    .withHour(Integer.parseInt(parts[0]))
+                    .withMinute(Integer.parseInt(parts[1]))
+                    .withSecond(0).withNano(0);
+                // If already past square-off (shouldn't happen but guard it)
+                if (expiresAt.isBefore(LocalDateTime.now())) {
+                    return null;
+                }
+            } else {
+                expiresAt = LocalDateTime.now().plusMinutes(config.signal().getApprovalWindowMinutes());
+            }
 
             // Build signal
             return TradeSignal.builder()
@@ -179,15 +254,16 @@ public class SignalGenerator {
                 .exchange(stock.getExchange())
                 .assetType("Stock")
                 .signalType(SignalType.BUY)
+                .intraday(intradayRun)
                 .entryPrice(entryPrice)
                 .targetPrice(target)
                 .stopLossPrice(stopLoss)
                 .riskRewardRatio(rrRatio)
-                .expectedHoldingDays(estimateHoldingDays(rrRatio, technicalResult))
+                .expectedHoldingDays(intradayRun ? 0 : estimateHoldingDays(rrRatio, technicalResult))
                 .riskLevel(classifyRisk(score.getComposite(), rrRatio))
                 .confidenceScore(score)
                 .capitalAllocationInr(allocationInr)
-                .capitalAllocationPct(config.positionSizing().getMaxSingleStockPct())
+                .capitalAllocationPct(allocationPct)
                 .postTradeCashInr(postTradeCash)
                 .cashBufferSafe(cashBufferSafe)
                 .sector(fundamentalResult.data() != null ? fundamentalResult.data().getSector() : "Unknown")
@@ -196,9 +272,12 @@ public class SignalGenerator {
                 .macroContext(macroResult.summary())
                 .worstCaseScenario(buildWorstCase(allocationInr, entryPrice, stopLoss))
                 .bullCaseScenario(buildBullCase(allocationInr, entryPrice, target))
-                .invalidationLevel(String.format("Price closes below ₹%.2f", stopLoss))
+                .invalidationLevel(intradayRun
+                    ? String.format("Price falls below ₹%.2f — must exit before %s",
+                        stopLoss, config.intraday().getSquareOffTime())
+                    : String.format("Price closes below ₹%.2f", stopLoss))
                 .generatedAt(LocalDateTime.now())
-                .expiresAt(LocalDateTime.now().plusMinutes(config.signal().getApprovalWindowMinutes()))
+                .expiresAt(expiresAt)
                 .build();
 
         } catch (Exception e) {

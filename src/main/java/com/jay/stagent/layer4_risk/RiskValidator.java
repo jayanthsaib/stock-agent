@@ -69,11 +69,23 @@ public class RiskValidator {
 
         // ── Hard Rule 3: Stop-Loss Bounds ────────────────────────────────────
         double slPct = Math.abs(entryPrice - stopLoss) / entryPrice * 100;
-        if (slPct < risk.getMinStopLossPct()) {
-            failures.add(String.format("Stop-loss %.1f%% below minimum %.0f%%", slPct, risk.getMinStopLossPct()));
-        }
-        if (slPct > risk.getMaxStopLossPct()) {
-            failures.add(String.format("Stop-loss %.1f%% exceeds maximum %.0f%%", slPct, risk.getMaxStopLossPct()));
+        if (signal.isIntraday()) {
+            // Intraday: much tighter SL bounds (0.3% – 2%)
+            AgentConfig.Intraday intraday = config.intraday();
+            double maxIntradaySl = intraday.getStopLossPct() * 2.5; // generous upper bound
+            if (slPct < 0.3) {
+                failures.add(String.format("Intraday stop-loss %.2f%% is too tight (min 0.3%%)", slPct));
+            }
+            if (slPct > maxIntradaySl) {
+                failures.add(String.format("Intraday stop-loss %.1f%% exceeds max %.1f%% for intraday", slPct, maxIntradaySl));
+            }
+        } else {
+            if (slPct < risk.getMinStopLossPct()) {
+                failures.add(String.format("Stop-loss %.1f%% below minimum %.0f%%", slPct, risk.getMinStopLossPct()));
+            }
+            if (slPct > risk.getMaxStopLossPct()) {
+                failures.add(String.format("Stop-loss %.1f%% exceeds maximum %.0f%%", slPct, risk.getMaxStopLossPct()));
+            }
         }
 
         // ── Hard Rule 4: Target must be above entry (BUY) ─────────────────────

@@ -229,6 +229,41 @@ public class AgentStatusController {
         ));
     }
 
+    // ── POST /api/signals/intraday ─────────────────────────────────────────────
+    // Manually trigger an intraday signal run (same as the 30-min scheduler).
+
+    @PostMapping("/signals/intraday")
+    public ResponseEntity<Map<String, Object>> submitIntradaySignals() {
+        dataIngestionEngine.refreshLivePrices();
+        List<TradeRecord> openPositions = tradeRepo.findByStatus("EXECUTED");
+        List<TradeSignal> signals = signalGenerator.generateIntradaySignals();
+
+        int submitted = 0, riskRejected = 0;
+        List<String> submittedIds = new ArrayList<>();
+        List<String> rejectedReasons = new ArrayList<>();
+
+        for (TradeSignal signal : signals) {
+            RiskValidator.ValidationResult validation = riskValidator.validate(signal, openPositions);
+            if (validation.passed()) {
+                approvalGateway.submitForApproval(signal, validation);
+                submittedIds.add(signal.getSymbol() + " (" + signal.getTradeId() + ")");
+                submitted++;
+            } else {
+                rejectedReasons.add(signal.getSymbol() + ": " + validation.failures());
+                riskRejected++;
+            }
+        }
+
+        return ResponseEntity.ok(Map.of(
+            "generatedAt", LocalDateTime.now().toString(),
+            "totalSignals", signals.size(),
+            "submittedToTelegram", submitted,
+            "riskRejected", riskRejected,
+            "submitted", submittedIds,
+            "rejected", rejectedReasons
+        ));
+    }
+
     // ── POST /api/refresh ──────────────────────────────────────────────────────
     // Kicks off the full NSE universe refresh in a background thread and returns
     // immediately.  Phase 1 filters all NSE stocks by price/volume; Phase 2

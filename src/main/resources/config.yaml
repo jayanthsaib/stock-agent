@@ -26,7 +26,7 @@ risk:
   min_risk_reward_ratio: 2.0          # Minimum R:R for any trade signal
   trailing_stop_activate_pct: 10      # Activate trailing stop when profit exceeds this %
   earnings_blackout_days: 5           # No buys N days before/after quarterly earnings
-  max_new_buys_per_week: 20           # Paper trading: high cap to observe more signals
+  max_new_buys_per_week: 50           # Paper trading: high cap to observe more signals
 
 # ── Signal Thresholds ───────────────────────────────────────────────────────
 signal:
@@ -75,6 +75,7 @@ macro:
   vix_caution_threshold: 20        # VIX above this: elevated caution, reduce sizes
   vix_favorable_threshold: 15      # VIX below this: favorable environment
   fii_selling_days_threshold: 10   # Consecutive FII selling days = reduce confidence
+  bear_market_dma_threshold_pct: 10 # Suppress buys if Nifty drops more than this % below 200 DMA (0 = disable)
 
 # ── Execution ────────────────────────────────────────────────────────────────
 execution:
@@ -96,6 +97,15 @@ telegram:
   bot_token: ${TELEGRAM_BOT_TOKEN}
   chat_id: ${TELEGRAM_CHAT_ID}
   polling_interval_seconds: 2
+
+# ── Intraday Trading ─────────────────────────────────────────────────────────
+intraday:
+  enabled: true                     # Enable intraday signal generation at every 30-min run
+  stop_loss_pct: 0.8                # Intraday stop-loss: 0.8% below entry
+  target_pct: 1.8                   # Intraday target: 1.8% above entry (gives R:R > 2)
+  min_confidence: 65                # Intraday is technical-only — lower bar vs swing
+  max_capital_per_trade_inr: 20000  # Per-trade capital cap for intraday (regardless of portfolio %)
+  square_off_time: "15:15"          # Alert time to square off all open intraday positions
 
 # ── Paper Trading Mode ────────────────────────────────────────────────────────
 paper_trading:
