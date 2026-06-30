@@ -71,6 +71,7 @@ public class ApprovalGateway {
             .symbol(record.getSymbol())
             .exchange(record.getExchange())
             .sector(record.getSector())
+            .assetType(record.getAssetType())
             .intraday(record.isIntraday())
             .signalType(record.getSignalType() != null
                 ? SignalType.valueOf(record.getSignalType()) : SignalType.BUY)
@@ -223,6 +224,7 @@ public class ApprovalGateway {
                 .symbol(signal.getSymbol())
                 .exchange(signal.getExchange())
                 .sector(signal.getSector())
+                .assetType(signal.getAssetType())
                 .signalType(signal.getSignalType().name())
                 .status(status)
                 .entryPrice(signal.getEntryPrice())

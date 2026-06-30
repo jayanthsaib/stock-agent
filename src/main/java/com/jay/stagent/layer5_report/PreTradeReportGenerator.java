@@ -15,97 +15,117 @@ import java.time.format.DateTimeFormatter;
 @Component
 public class PreTradeReportGenerator {
 
-    private static final String DIVIDER =
-        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━";
-    private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("dd-MMM-yyyy HH:mm");
+    private static final String LINE = "─────────────────────────────";
+    private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("dd-MMM HH:mm");
+    private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("dd-MMM-yyyy");
 
-    /**
-     * Generates the full pre-trade report text for a trade signal.
-     * Includes all fields from the blueprint template.
-     */
     public String generate(TradeSignal signal, RiskValidator.ValidationResult validation) {
-        var cs = signal.getConfidenceScore();
-        String timestamp = signal.getGeneratedAt() != null
-            ? signal.getGeneratedAt().format(FMT) : "NOW";
-        String expiresAt = signal.getExpiresAt() != null
-            ? signal.getExpiresAt().format(FMT) : "30 min";
-
-        StringBuilder sb = new StringBuilder();
-        sb.append("📊 PRE-TRADE ANALYSIS REPORT  —  ").append(timestamp).append("\n");
-        sb.append(DIVIDER).append("\n");
-        sb.append(String.format("TRADE ID          :  %s%n", signal.getTradeId()));
-        sb.append(String.format("ASSET NAME        :  %s (%s: %s)%n",
-            signal.getSymbol(), signal.getExchange(), signal.getSymbol()));
-        sb.append(String.format("ASSET TYPE        :  %s%n", signal.getAssetType()));
-        sb.append(String.format("SIGNAL TYPE       :  %s%n", signal.getSignalType()));
-        sb.append(DIVIDER).append("\n");
-        sb.append(String.format("BUY PRICE         :  ₹%.2f  (Limit order)%n", signal.getEntryPrice()));
-        sb.append(String.format("TARGET PRICE      :  ₹%.2f%n", signal.getTargetPrice()));
-        sb.append(String.format("STOP-LOSS PRICE   :  ₹%.2f  (NEVER moved down)%n", signal.getStopLossPrice()));
-        sb.append(String.format("RISK-REWARD RATIO :  1 : %.1f%n", signal.getRiskRewardRatio()));
-        sb.append(String.format("EXPECTED HOLD     :  %d days%n", signal.getExpectedHoldingDays()));
-        sb.append(String.format("RISK LEVEL        :  %s%n", signal.getRiskLevel()));
-        sb.append(String.format("CONFIDENCE SCORE  :  %.0f%%  [%s]%n",
-            cs.getComposite(), cs.breakdownString()));
-        sb.append(String.format("CLASSIFICATION    :  %s%n", cs.classification()));
-        sb.append(DIVIDER).append("\n");
-        sb.append(String.format("CAPITAL ALLOC     :  ₹%.0f  (%.1f%% of portfolio)%n",
-            signal.getCapitalAllocationInr(), signal.getCapitalAllocationPct()));
-        sb.append(String.format("POST-TRADE CASH   :  ₹%.0f  (Buffer: %s)%n",
-            signal.getPostTradeCashInr(),
-            signal.isCashBufferSafe() ? "✅ SAFE" : "⚠️ CHECK"));
-        sb.append(DIVIDER).append("\n");
-        sb.append(String.format("📈 FUNDAMENTAL    :  %s%n", signal.getFundamentalSummary()));
-        sb.append(String.format("📉 TECHNICAL      :  %s%n", signal.getTechnicalSummary()));
-        sb.append(String.format("🌐 MACRO CONTEXT  :  %s%n", signal.getMacroContext()));
-        sb.append(DIVIDER).append("\n");
-        sb.append(String.format("❌ WORST CASE     :  %s%n", signal.getWorstCaseScenario()));
-        sb.append(String.format("✅ BULL CASE      :  %s%n", signal.getBullCaseScenario()));
-        sb.append(String.format("⛔ INVALIDATION   :  %s%n", signal.getInvalidationLevel()));
-        sb.append(DIVIDER).append("\n");
-
-        // Warnings from risk validator
-        if (!validation.warnings().isEmpty()) {
-            sb.append("⚠️  RISK WARNINGS:\n");
-            validation.warnings().forEach(w -> sb.append("   • ").append(w).append("\n"));
-            sb.append(DIVIDER).append("\n");
+        if ("Mutual Fund".equals(signal.getAssetType())) {
+            return generateMF(signal, validation);
         }
 
-        sb.append(String.format("📲 Reply:  APPROVE %s  or  REJECT %s [reason]%n",
+        var cs = signal.getConfidenceScore();
+        String emoji = signal.getSignalType().name().equals("BUY") ? "📈" : "📉";
+        String expires = signal.getExpiresAt() != null
+            ? signal.getExpiresAt().format(FMT) : "—";
+
+        StringBuilder sb = new StringBuilder();
+        sb.append(String.format("%s <b>%s  %s</b>  •  %s  •  <b>%.0f%%</b>%n",
+            emoji, signal.getSignalType(), signal.getSymbol(),
+            signal.getExchange(), cs.getComposite()));
+        sb.append(LINE).append("\n");
+        sb.append(String.format("Entry <b>₹%.2f</b>  |  Target <b>₹%.2f</b>  |  SL <b>₹%.2f</b>%n",
+            signal.getEntryPrice(), signal.getTargetPrice(), signal.getStopLossPrice()));
+        sb.append(String.format("R:R 1:%.1f  •  Hold ~%dd  •  ₹%.0f alloc%n",
+            signal.getRiskRewardRatio(), signal.getExpectedHoldingDays(),
+            signal.getCapitalAllocationInr()));
+        sb.append(LINE).append("\n");
+        sb.append(String.format("F:%.0f  T:%.0f  M:%.0f  RR:%.0f%n",
+            cs.getFundamentalScore(), cs.getTechnicalScore(),
+            cs.getMacroScore(), cs.getRiskRewardScore()));
+        if (signal.getFundamentalSummary() != null && !signal.getFundamentalSummary().isBlank())
+            sb.append("📊 ").append(truncate(signal.getFundamentalSummary(), 120)).append("\n");
+        if (signal.getTechnicalSummary() != null && !signal.getTechnicalSummary().isBlank())
+            sb.append("📉 ").append(truncate(signal.getTechnicalSummary(), 120)).append("\n");
+        if (!validation.warnings().isEmpty()) {
+            sb.append("⚠️ ");
+            sb.append(String.join(" | ", validation.warnings()));
+            sb.append("\n");
+        }
+        sb.append(LINE).append("\n");
+        sb.append(String.format("✅ <code>APPROVE %s</code>  |  ❌ <code>REJECT %s</code>%n",
             signal.getTradeId(), signal.getTradeId()));
-        sb.append(String.format("⏰ Signal expires at:  %s%n", expiresAt));
-        sb.append("─────────────────────────────────────────────────────────\n");
+        sb.append(String.format("⏰ %s  •  %s%n", expires, signal.getTradeId()));
 
         return sb.toString();
     }
 
-    /**
-     * Generates a short summary notification (used for already-approved/executed signals).
-     */
+    private String generateMF(TradeSignal signal, RiskValidator.ValidationResult validation) {
+        var cs = signal.getConfidenceScore();
+        String mode = signal.getMfSignalMode() != null ? signal.getMfSignalMode() : "BUY";
+        String modeLabel = switch (mode) {
+            case "SIP"          -> "SIP Start";
+            case "SIP_CONTINUE" -> "SIP Continue";
+            case "SIP_STOP"     -> "SIP Stop/Redeem";
+            case "LUMP_SUM"     -> "Lump Sum";
+            default             -> mode;
+        };
+        String modeEmoji = switch (mode) {
+            case "SIP_STOP" -> "🔴";
+            case "SIP_CONTINUE" -> "🟡";
+            default -> "💰";
+        };
+        String expires = signal.getExpiresAt() != null
+            ? signal.getExpiresAt().format(DATE_FMT) : "7 days";
+
+        StringBuilder sb = new StringBuilder();
+        sb.append(String.format("%s <b>%s  %s</b>  •  <b>%.0f%%</b>%n",
+            modeEmoji, modeLabel, signal.getSymbol(), cs.getComposite()));
+        sb.append(String.format("%s  •  %s%n", signal.getSector(),
+            signal.getFundamentalSummary() != null
+                ? truncate(signal.getFundamentalSummary().split("\\.")[0], 40) : ""));
+        sb.append(LINE).append("\n");
+        sb.append(String.format("NAV <b>₹%.4f</b>  |  Target <b>₹%.4f</b>  |  ₹%.0f%n",
+            signal.getEntryPrice(), signal.getTargetPrice(),
+            signal.getCapitalAllocationInr()));
+        sb.append(String.format("Quality %.0f%%  •  Macro %.0f%%  •  %d-day horizon%n",
+            cs.getFundamentalScore(), cs.getMacroScore(), signal.getExpectedHoldingDays()));
+        if (signal.getTechnicalSummary() != null && !signal.getTechnicalSummary().isBlank())
+            sb.append("📉 ").append(truncate(signal.getTechnicalSummary(), 120)).append("\n");
+        if (!validation.warnings().isEmpty()) {
+            sb.append("⚠️ ");
+            sb.append(String.join(" | ", validation.warnings()));
+            sb.append("\n");
+        }
+        sb.append(LINE).append("\n");
+        sb.append(String.format("✅ <code>APPROVE %s</code>  |  ❌ <code>REJECT %s</code>%n",
+            signal.getTradeId(), signal.getTradeId()));
+        sb.append(String.format("⏰ %s  •  %s%n", expires, signal.getTradeId()));
+        return sb.toString();
+    }
+
     public String generateExecutionConfirmation(TradeSignal signal, String brokerOrderId) {
-        return String.format(
-            "✅ ORDER PLACED%n" +
-            "Trade ID  : %s%n" +
-            "Symbol    : %s @ ₹%.2f%n" +
-            "Qty       : %d shares%n" +
-            "Stop-loss : ₹%.2f%n" +
-            "Target    : ₹%.2f%n" +
-            "Order ID  : %s%n",
-            signal.getTradeId(), signal.getSymbol(), signal.getEntryPrice(),
+        if ("Mutual Fund".equals(signal.getAssetType())) {
+            String mode = signal.getMfSignalMode() != null ? signal.getMfSignalMode() : "BUY";
+            return String.format("✅ <b>MF APPROVED</b>  %s  •  %s%n₹%.0f @ NAV ₹%.4f  •  Act via your MF platform.",
+                signal.getSymbol(), mode, signal.getCapitalAllocationInr(), signal.getEntryPrice());
+        }
+        return String.format("✅ <b>ORDER PLACED</b>  %s @ ₹%.2f  •  %d shares%nSL ₹%.2f  |  Target ₹%.2f  |  Order %s",
+            signal.getSymbol(), signal.getEntryPrice(),
             (int)(signal.getCapitalAllocationInr() / signal.getEntryPrice()),
-            signal.getStopLossPrice(), signal.getTargetPrice(), brokerOrderId
-        );
+            signal.getStopLossPrice(), signal.getTargetPrice(), brokerOrderId);
     }
 
-    /** Generates a rejection notification */
     public String generateRejectionAck(String tradeId, String reason) {
-        return String.format("❌ SIGNAL REJECTED%nTrade ID: %s%nReason: %s%n" +
-            "Signal archived for learning module.", tradeId, reason);
+        return String.format("❌ Rejected  <code>%s</code>  —  %s", tradeId, reason);
     }
 
-    /** Generates an expiry notification */
     public String generateExpiryNotification(String tradeId) {
-        return String.format("⏰ SIGNAL EXPIRED%nTrade ID: %s%n" +
-            "No response received — signal auto-expired. No trade placed.", tradeId);
+        return String.format("⏰ Expired  <code>%s</code>  —  no response. No trade placed.", tradeId);
+    }
+
+    private String truncate(String s, int max) {
+        if (s == null) return "";
+        return s.length() <= max ? s : s.substring(0, max - 1) + "…";
     }
 }

@@ -43,6 +43,10 @@ public class RiskValidator {
      * Returns a ValidationResult indicating pass/fail with reasons.
      */
     public ValidationResult validate(TradeSignal signal, List<TradeRecord> openPositions) {
+        if ("Mutual Fund".equals(signal.getAssetType())) {
+            return validateMutualFund(signal, openPositions);
+        }
+
         List<String> failures = new ArrayList<>();
         List<String> warnings = new ArrayList<>();
 
@@ -174,6 +178,81 @@ public class RiskValidator {
         }
 
         log.info("Risk validation PASSED for {} — {} warnings", signal.getSymbol(), warnings.size());
+        return ValidationResult.pass(warnings);
+    }
+
+    // ── MF Validation ─────────────────────────────────────────────────────────
+
+    private ValidationResult validateMutualFund(TradeSignal signal, List<TradeRecord> openPositions) {
+        List<String> failures = new ArrayList<>();
+        List<String> warnings = new ArrayList<>();
+
+        AgentConfig.Portfolio port = config.portfolio();
+        AgentConfig.PositionSizing ps = config.positionSizing();
+        AgentConfig.Risk risk = config.risk();
+
+        // MF-1: Total MF allocation cap
+        double currentMFAlloc = openPositions.stream()
+            .filter(p -> "Mutual Fund".equals(p.getAssetType()) && "EXECUTED".equals(p.getStatus()))
+            .mapToDouble(TradeRecord::getCapitalAllocationInr)
+            .sum();
+        double maxMFInr = portfolioValueService.getPortfolioValue()
+            * port.getMutualFundAllocationPct() / 100.0;
+        if (signal.getCapitalAllocationInr() > 0 &&
+            currentMFAlloc + signal.getCapitalAllocationInr() > maxMFInr) {
+            failures.add(String.format("MF allocation cap: current ₹%.0f + new ₹%.0f > max ₹%.0f (%.0f%% of portfolio)",
+                currentMFAlloc, signal.getCapitalAllocationInr(), maxMFInr,
+                port.getMutualFundAllocationPct()));
+        }
+
+        // MF-2: Emergency cash buffer
+        if (!signal.isCashBufferSafe() && signal.getCapitalAllocationInr() > 0) {
+            failures.add("MF investment would breach emergency cash buffer");
+        }
+
+        // MF-3: No duplicate active scheme (for BUY signals)
+        if (signal.getSignalType() != null && "BUY".equals(signal.getSignalType().name())) {
+            boolean alreadyHolding = openPositions.stream()
+                .anyMatch(p -> p.getSymbol().equals(signal.getSymbol())
+                            && "EXECUTED".equals(p.getStatus()));
+            if (alreadyHolding) {
+                failures.add(String.format("Already have active position in scheme %s", signal.getSymbol()));
+            }
+        }
+
+        // MF-4: Max new buys per week
+        if (signal.getSignalType() != null && "BUY".equals(signal.getSignalType().name())) {
+            long newBuysThisWeek = tradeRepo.countNewBuysSince(LocalDateTime.now().minusDays(7));
+            if (newBuysThisWeek >= risk.getMaxNewBuysPerWeek()) {
+                failures.add(String.format("Max new buys per week reached: %d/%d",
+                    newBuysThisWeek, risk.getMaxNewBuysPerWeek()));
+            }
+        }
+
+        // MF-5: Minimum position size (only for BUY/LUMP_SUM)
+        if (signal.getCapitalAllocationInr() > 0
+            && signal.getCapitalAllocationInr() < ps.getMinPositionSizeInr()) {
+            failures.add(String.format("MF allocation ₹%.0f below minimum ₹%.0f",
+                signal.getCapitalAllocationInr(), ps.getMinPositionSizeInr()));
+        }
+
+        // MF-W1: SELL with no active position
+        if (signal.getSignalType() != null && "SELL".equals(signal.getSignalType().name())) {
+            boolean hasPosition = openPositions.stream()
+                .anyMatch(p -> p.getSymbol().equals(signal.getSymbol())
+                            && "EXECUTED".equals(p.getStatus()));
+            if (!hasPosition) {
+                warnings.add("SIP_STOP signal but no active position found in " + signal.getSymbol());
+            }
+        }
+
+        if (!failures.isEmpty()) {
+            log.info("MF risk validation FAILED for {} — {} violations: {}",
+                signal.getSymbol(), failures.size(), String.join("; ", failures));
+            return ValidationResult.fail(failures);
+        }
+        log.info("MF risk validation PASSED for {} ({})", signal.getSymbol(),
+            signal.getMfSignalMode());
         return ValidationResult.pass(warnings);
     }
 

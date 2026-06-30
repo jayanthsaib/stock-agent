@@ -3,6 +3,7 @@ package com.jay.stagent.layer2_analysis;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jay.stagent.config.AgentConfig;
+import com.jay.stagent.model.MFSchemeData;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.OkHttpClient;
@@ -14,10 +15,8 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Layer 2 — Mutual Fund Analysis Module.
- * Evaluates MF quality for SIP or lump-sum decisions (reviewed monthly, not daily).
- * Data source: AMFI NAV API (free, public) + Value Research / MFI Explorer.
- *
- * AMFI NAV API: https://api.mfapi.in/mf/{schemeCode}
+ * Evaluates MF quality for SIP or lump-sum decisions.
+ * Data source: AMFI NAV API via mfapi.in (pre-fetched by MFDataIngestionEngine).
  */
 @Slf4j
 @Component
@@ -36,35 +35,29 @@ public class MutualFundAnalysisModule {
         String summary,
         String fundName,
         double cagr3y,
-        double expenseRatio,
-        double sharpeRatio
+        double sharpeRatio,
+        double return1y,
+        double return6m,
+        double return3m,
+        int consistencyCount
     ) {}
 
     /**
-     * Analyses a mutual fund by scheme code and returns a score 0-100.
-     * @param schemeCode AMFI scheme code (e.g., 120503 for Axis Bluechip)
+     * Analyses a mutual fund from pre-fetched MFSchemeData.
+     * Called by MFSignalGenerator with data already in memory.
      */
-    public MutualFundResult analyse(String schemeCode) {
-        JsonNode fundData = fetchFromAmfi(schemeCode);
-        if (fundData == null) {
-            return new MutualFundResult(0, "Could not fetch MF data for " + schemeCode,
-                schemeCode, 0, 0, 0);
-        }
-
-        String fundName = fundData.path("meta").path("fund_house").asText("Unknown Fund");
+    public MutualFundResult analyse(MFSchemeData scheme, double benchmarkCagr3y) {
         double score = 50.0;
         StringBuilder summary = new StringBuilder();
 
-        // For production: compute CAGR from NAV history, fetch expense ratio from scheme documents
-        // Below uses placeholder values — wire to Value Research API or MF Docs for real data
+        String fundName = scheme.getSchemeName();
 
         // ── Returns vs Benchmark (max 25 pts) ─────────────────────────────────
-        double cagr3y = computeCAGR(fundData, 3);
-        double niftyCagr3y = 12.0; // Approximate Nifty 50 3Y CAGR — fetch from data engine
-        if (cagr3y > niftyCagr3y + 2) {
+        double cagr3y = scheme.getCagr3y();
+        if (cagr3y > benchmarkCagr3y + 2) {
             score += 25;
             summary.append(String.format("3Y CAGR %.1f%% — beats benchmark ✓. ", cagr3y));
-        } else if (cagr3y > niftyCagr3y) {
+        } else if (cagr3y > benchmarkCagr3y) {
             score += 15;
             summary.append(String.format("3Y CAGR %.1f%% — beats benchmark. ", cagr3y));
         } else {
@@ -72,38 +65,79 @@ public class MutualFundAnalysisModule {
             summary.append(String.format("3Y CAGR %.1f%% — underperforms benchmark ✗. ", cagr3y));
         }
 
-        // ── Expense Ratio (max 15 pts) ─────────────────────────────────────────
-        // AMFI doesn't provide this directly — default to checking fund category
-        double expenseRatio = 0.5; // Default; fetch from scheme documents for real data
-        if (expenseRatio <= 0.5) { score += 15; summary.append("Expense ratio ≤0.5% ✓. "); }
-        else if (expenseRatio <= 1.2) { score += 8; summary.append("Expense ratio acceptable. "); }
-        else { score -= 5; summary.append("High expense ratio ✗. "); }
+        // ── Direct Plan / Expense Ratio (max 15 pts) ─────────────────────────
+        if (scheme.isDirect()) {
+            score += 15;
+            summary.append("Direct plan (lower expense ratio) ✓. ");
+        } else {
+            summary.append("Regular plan (higher expense ratio) ✗. ");
+        }
 
         // ── Sharpe Ratio (max 20 pts) ─────────────────────────────────────────
-        double sharpe = computeSharpeRatio(fundData);
-        if (sharpe >= 1.5) { score += 20; summary.append(String.format("Sharpe=%.2f excellent ✓. ", sharpe)); }
+        double sharpe = scheme.getSharpeRatio();
+        if (sharpe >= 1.5)      { score += 20; summary.append(String.format("Sharpe=%.2f excellent ✓. ", sharpe)); }
         else if (sharpe >= 0.8) { score += 12; summary.append(String.format("Sharpe=%.2f acceptable. ", sharpe)); }
-        else { score -= 10; summary.append(String.format("Sharpe=%.2f below minimum ✗. ", sharpe)); }
+        else                    { score -= 10; summary.append(String.format("Sharpe=%.2f below minimum ✗. ", sharpe)); }
 
-        // ── AUM Size (max 10 pts) ─────────────────────────────────────────────
-        // AUM not available from AMFI NAV API — default to passing
-        score += 8; // Add when wired to Value Research API
-        summary.append("AUM size: acceptable. ");
+        // ── NAV Momentum (replaces AUM, max 10 pts) ───────────────────────────
+        double r1y = scheme.getReturn1y(), r6m = scheme.getReturn6m(), r3m = scheme.getReturn3m();
+        if (r1y > 15 && r6m > 7 && r3m > 3)    { score += 10; summary.append("Strong momentum ✓. "); }
+        else if (r1y > 10 && r6m > 4)            { score += 7;  summary.append("Good momentum. "); }
+        else if (r1y > 0 && r6m > 0)             { score += 4;  summary.append("Mild positive momentum. "); }
+        else                                      { score -= 5;  summary.append("Negative recent momentum ✗. "); }
 
-        // ── Fund Manager Tenure (max 10 pts) ──────────────────────────────────
-        // Not available from AMFI API — wire to fund documents
-        score += 7;
-        summary.append("Manager tenure: assumed adequate. ");
+        // ── Consistency (replaces manager tenure, max 10 pts) ────────────────
+        int c = scheme.getConsistencyCount();
+        if (c >= 8)      { score += 10; summary.append(String.format("Consistent: %d/9 positive periods ✓. ", c)); }
+        else if (c >= 6) { score += 7;  summary.append(String.format("Consistent: %d/9 positive periods. ", c)); }
+        else if (c >= 4) { score += 3;  summary.append(String.format("Inconsistent: %d/9 positive periods. ", c)); }
+        else             { score -= 5;  summary.append(String.format("Poor consistency: %d/9 positive periods ✗. ", c)); }
 
-        // ── Portfolio Concentration (max 10 pts) ──────────────────────────────
-        score += 8;
-        summary.append("Concentration: not assessed — fetch fund portfolio data. ");
+        // ── Category Score (replaces concentration, max 10 pts) ──────────────
+        String cat = scheme.getCategory() != null ? scheme.getCategory().toLowerCase() : "";
+        if (cat.contains("flexi cap") || cat.contains("multi cap")) { score += 10; summary.append("Diversified category ✓. "); }
+        else if (cat.contains("large cap"))                          { score += 8;  summary.append("Large cap category. "); }
+        else if (cat.contains("elss"))                               { score += 7;  summary.append("ELSS (tax benefit). "); }
+        else if (cat.contains("mid cap"))                            { score += 6;  summary.append("Mid cap category. "); }
+        else if (cat.contains("small cap"))                          { score += 5;  summary.append("Small cap — higher risk. "); }
+        else                                                          { score += 3;  summary.append("Sector/thematic fund. "); }
 
         score = Math.max(0, Math.min(100, score));
-        log.debug("MF score for scheme {}: {:.1f}", schemeCode, score);
+        log.debug("MF score for {}: {}", scheme.getSchemeCode(), score);
 
         return new MutualFundResult(score, summary.toString().trim(),
-            fundName, cagr3y, expenseRatio, sharpe);
+            fundName, cagr3y, sharpe, r1y, r6m, r3m, c);
+    }
+
+    /**
+     * Analyses a mutual fund by scheme code directly (standalone / legacy use).
+     */
+    public MutualFundResult analyse(String schemeCode) {
+        JsonNode fundData = fetchFromAmfi(schemeCode);
+        if (fundData == null) {
+            return new MutualFundResult(0, "Could not fetch MF data for " + schemeCode,
+                schemeCode, 0, 0, 0, 0, 0, 0);
+        }
+
+        String fundName = fundData.path("meta").path("fund_house").asText("Unknown Fund");
+        JsonNode navData = fundData.path("data");
+
+        MFSchemeData scheme = MFSchemeData.builder()
+            .schemeCode(schemeCode)
+            .schemeName(fundName)
+            .category(fundData.path("meta").path("scheme_category").asText(""))
+            .isDirect(fundName.toLowerCase().contains("direct"))
+            .currentNav(navData.isEmpty() ? 0 : navData.get(0).path("nav").asDouble(0))
+            .cagr3y(computeCAGR(navData, 3))
+            .sharpeRatio(computeSharpe(navData))
+            .return1y(computeReturn(navData, 252))
+            .return6m(computeReturn(navData, 126))
+            .return3m(computeReturn(navData, 63))
+            .consistencyCount(computeConsistency(navData))
+            .build();
+
+        double benchmark = config.mutualFunds().getBenchmarkCagr3yPct();
+        return analyse(scheme, benchmark);
     }
 
     // ── AMFI API ───────────────────────────────────────────────────────────────
@@ -122,59 +156,60 @@ public class MutualFundAnalysisModule {
         }
     }
 
-    /**
-     * Computes approximate CAGR from NAV history.
-     * Formula: CAGR = (currentNav / navNYearsAgo)^(1/N) - 1
-     */
-    private double computeCAGR(JsonNode fundData, int years) {
+    private double computeCAGR(JsonNode navData, int years) {
         try {
-            JsonNode navData = fundData.path("data");
-            if (navData.isEmpty()) return 0;
-
-            double currentNav = navData.get(0).path("nav").asDouble(0);
-            int targetIndex = Math.min(years * 252, navData.size() - 1); // ~252 trading days/year
-            double oldNav = navData.get(targetIndex).path("nav").asDouble(0);
-
-            if (oldNav <= 0 || currentNav <= 0) return 0;
-            return (Math.pow(currentNav / oldNav, 1.0 / years) - 1) * 100;
-        } catch (Exception e) {
-            return 0;
-        }
+            int idx = Math.min(years * 252, navData.size() - 1);
+            double current = navData.get(0).path("nav").asDouble(0);
+            double old = navData.get(idx).path("nav").asDouble(0);
+            if (old <= 0 || current <= 0) return 0;
+            return (Math.pow(current / old, 1.0 / years) - 1) * 100;
+        } catch (Exception e) { return 0; }
     }
 
-    /**
-     * Computes approximate Sharpe ratio from NAV returns.
-     * Uses 1-year NAV history. Risk-free rate approximated as 6.5%.
-     */
-    private double computeSharpeRatio(JsonNode fundData) {
+    private double computeSharpe(JsonNode navData) {
         try {
-            JsonNode navData = fundData.path("data");
             int days = Math.min(252, navData.size() - 1);
             if (days < 30) return 0;
-
             double[] returns = new double[days];
             for (int i = 0; i < days; i++) {
-                double nav1 = navData.get(i).path("nav").asDouble(0);
-                double nav2 = navData.get(i + 1).path("nav").asDouble(0);
-                returns[i] = nav2 > 0 ? (nav1 - nav2) / nav2 : 0;
+                double n1 = navData.get(i).path("nav").asDouble(0);
+                double n2 = navData.get(i + 1).path("nav").asDouble(0);
+                returns[i] = n2 > 0 ? (n1 - n2) / n2 : 0;
             }
+            double mean = 0;
+            for (double r : returns) mean += r;
+            mean /= days;
+            double var = 0;
+            for (double r : returns) var += (r - mean) * (r - mean);
+            double std = Math.sqrt(var / days);
+            double annRet = mean * 252;
+            double annStd = std * Math.sqrt(252);
+            return annStd > 0 ? (annRet - 0.065) / annStd : 0;
+        } catch (Exception e) { return 0; }
+    }
 
-            double meanReturn = 0;
-            for (double r : returns) meanReturn += r;
-            meanReturn /= days;
+    private double computeReturn(JsonNode navData, int approximateDays) {
+        try {
+            int idx = Math.min(approximateDays, navData.size() - 1);
+            double current = navData.get(0).path("nav").asDouble(0);
+            double old = navData.get(idx).path("nav").asDouble(0);
+            if (old <= 0 || current <= 0) return 0;
+            return (current / old - 1) * 100;
+        } catch (Exception e) { return 0; }
+    }
 
-            double variance = 0;
-            for (double r : returns) variance += (r - meanReturn) * (r - meanReturn);
-            variance /= days;
-            double stdDev = Math.sqrt(variance);
-
-            double annualReturn = meanReturn * 252;
-            double annualStd = stdDev * Math.sqrt(252);
-            double riskFreeRate = 0.065; // RBI repo rate approximation
-
-            return annualStd > 0 ? (annualReturn - riskFreeRate) / annualStd : 0;
-        } catch (Exception e) {
-            return 0;
+    private int computeConsistency(JsonNode navData) {
+        int count = 0;
+        for (int w = 0; w < 9; w++) {
+            int startIdx = w * 63;
+            int endIdx = startIdx + 252;
+            if (endIdx >= navData.size()) break;
+            try {
+                double start = navData.get(endIdx).path("nav").asDouble(0);
+                double end = navData.get(startIdx).path("nav").asDouble(0);
+                if (start > 0 && end > start) count++;
+            } catch (Exception ignored) {}
         }
+        return count;
     }
 }

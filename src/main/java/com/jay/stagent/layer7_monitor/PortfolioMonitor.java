@@ -53,6 +53,9 @@ public class PortfolioMonitor {
 
         for (TradeRecord position : openPositions) {
             try {
+                // MF positions have no Angel One token — skip price monitoring
+                if ("Mutual Fund".equals(position.getAssetType())) continue;
+
                 double currentPrice = fetchCurrentPrice(position.getSymbol());
                 if (currentPrice <= 0) {
                     log.warn("Could not fetch price for {} — skipping", position.getSymbol());

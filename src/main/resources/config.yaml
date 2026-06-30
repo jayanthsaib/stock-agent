@@ -107,6 +107,24 @@ intraday:
   max_capital_per_trade_inr: 20000  # Per-trade capital cap for intraday (regardless of portfolio %)
   square_off_time: "15:15"          # Alert time to square off all open intraday positions
 
+# ── Mutual Fund Analysis ─────────────────────────────────────────────────────
+mutual_funds:
+  enabled: true
+  min_score_to_notify: 60
+  min_cagr_3y_pct: 10.0
+  min_sharpe_ratio: 0.3
+  max_schemes_to_analyse: 300
+  default_sip_amount_inr: 5000
+  default_lumpsum_amount_inr: 50000
+  benchmark_cagr_3y_pct: 12.0
+  categories_to_include:
+    - "Large Cap"
+    - "Mid Cap"
+    - "Small Cap"
+    - "Flexi Cap"
+    - "Multi Cap"
+    - "ELSS"
+
 # ── Paper Trading Mode ────────────────────────────────────────────────────────
 paper_trading:
   enabled: true                    # Phase 1: always start in paper trading mode

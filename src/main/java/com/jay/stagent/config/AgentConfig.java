@@ -55,6 +55,7 @@ public class AgentConfig {
     private Telegram telegram = new Telegram();
     private PaperTrading paperTrading = new PaperTrading();
     private Intraday intraday = new Intraday();
+    private MutualFunds mutualFunds = new MutualFunds();
     private List<String> watchlist = List.of();
     private List<String> marketHolidays = List.of();
 
@@ -86,6 +87,7 @@ public class AgentConfig {
             this.telegram        = root.getTelegram();
             this.paperTrading    = root.getPaperTrading();
             this.intraday        = root.getIntraday() != null ? root.getIntraday() : new Intraday();
+            this.mutualFunds     = root.getMutualFunds() != null ? root.getMutualFunds() : new MutualFunds();
 
             // Resolve ${VAR:default} placeholders that Jackson reads as literal strings
             this.broker.setApiKey(resolve(this.broker.getApiKey()));
@@ -117,6 +119,7 @@ public class AgentConfig {
     public Telegram telegram()             { return telegram; }
     public PaperTrading paperTrading()     { return paperTrading; }
     public Intraday intraday()             { return intraday; }
+    public MutualFunds mutualFunds()       { return mutualFunds; }
     public List<String> watchlist()        { return watchlist; }
     public List<String> marketHolidays()   { return marketHolidays; }
 
@@ -137,6 +140,7 @@ public class AgentConfig {
         private Telegram telegram = new Telegram();
         private PaperTrading paperTrading = new PaperTrading();
         private Intraday intraday = new Intraday();
+        private MutualFunds mutualFunds = new MutualFunds();
         private List<String> watchlist;
         private List<String> marketHolidays;
     }
@@ -248,5 +252,18 @@ public class AgentConfig {
         private double minConfidence = 75;
         private double maxCapitalPerTradeInr = 20000;
         private String squareOffTime = "15:15";
+    }
+
+    @Data public static class MutualFunds {
+        private boolean enabled = false;
+        private double minScoreToNotify = 60;
+        private double minCagr3yPct = 10.0;
+        private double minSharpeRatio = 0.3;
+        private int maxSchemesToAnalyse = 300;
+        private double defaultSipAmountInr = 5000;
+        private double defaultLumpsumAmountInr = 50000;
+        private double benchmarkCagr3yPct = 12.0;
+        private List<String> categoriesToInclude = List.of(
+            "Large Cap", "Mid Cap", "Small Cap", "Flexi Cap", "Multi Cap", "ELSS");
     }
 }

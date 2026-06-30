@@ -5,7 +5,9 @@ import com.jay.stagent.entity.TradeRecord;
 import com.jay.stagent.layer1_data.AngelOneClient;
 import com.jay.stagent.layer1_data.DataIngestionEngine;
 import com.jay.stagent.layer1_data.MarketCalendarService;
+import com.jay.stagent.layer1_data.MFDataIngestionEngine;
 import com.jay.stagent.layer3_signal.BacktestEngine;
+import com.jay.stagent.layer3_signal.MFSignalGenerator;
 import com.jay.stagent.layer3_signal.SignalGenerator;
 import com.jay.stagent.layer3_signal.StockAnalysisService;
 import com.jay.stagent.layer4_risk.RiskValidator;
@@ -53,6 +55,8 @@ public class AgentStatusController {
     private final TelegramService telegramService;
     private final StockAnalysisService stockAnalysisService;
     private final DataIngestionEngine dataIngestionEngine;
+    private final MFDataIngestionEngine mfDataIngestionEngine;
+    private final MFSignalGenerator mfSignalGenerator;
     private final MarketCalendarService marketCalendar;
     private final SignalGenerator signalGenerator;
     private final BacktestEngine backtestEngine;
@@ -313,6 +317,51 @@ public class AgentStatusController {
             : List.of();
         BacktestEngine.BacktestReport report = backtestEngine.run(symbols);
         return ResponseEntity.ok(report);
+    }
+
+    // ── POST /api/mf/scan ──────────────────────────────────────────────────────
+    // ?refreshData=true forces an AMFI data refresh before signal generation.
+    // Without it, uses the cached scheme data (or auto-refreshes if cache is empty).
+
+    @PostMapping("/mf/scan")
+    public ResponseEntity<Map<String, Object>> scanMutualFunds(
+            @RequestParam(defaultValue = "false") boolean refreshData) {
+        long startMs = System.currentTimeMillis();
+
+        if (refreshData || mfDataIngestionEngine.getCachedSchemes().isEmpty()) {
+            mfDataIngestionEngine.refresh();
+        }
+
+        List<TradeRecord> openPositions = tradeRepo.findByStatus("EXECUTED");
+        List<TradeSignal> signals = mfSignalGenerator.generateSignals();
+
+        int submitted = 0, riskRejected = 0;
+        List<String> submittedIds = new ArrayList<>();
+        List<String> rejectedReasons = new ArrayList<>();
+
+        for (TradeSignal signal : signals) {
+            RiskValidator.ValidationResult v = riskValidator.validate(signal, openPositions);
+            if (v.passed()) {
+                approvalGateway.submitForApproval(signal, v);
+                submittedIds.add(signal.getSymbol() + " [" + signal.getMfSignalMode() + "] ("
+                    + signal.getTradeId() + ")");
+                submitted++;
+            } else {
+                rejectedReasons.add(signal.getSymbol() + ": " + v.failures());
+                riskRejected++;
+            }
+        }
+
+        return ResponseEntity.ok(Map.of(
+            "scannedAt", LocalDateTime.now().toString(),
+            "elapsedSeconds", (System.currentTimeMillis() - startMs) / 1000,
+            "schemesAnalysed", mfDataIngestionEngine.getCachedSchemes().size(),
+            "signalsGenerated", signals.size(),
+            "submittedToTelegram", submitted,
+            "riskRejected", riskRejected,
+            "submitted", submittedIds,
+            "rejected", rejectedReasons
+        ));
     }
 
     // ── GET /api/market/status ────────────────────────────────────────────────

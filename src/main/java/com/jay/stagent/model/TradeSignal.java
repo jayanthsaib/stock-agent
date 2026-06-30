@@ -58,6 +58,9 @@ public class TradeSignal {
     // Intraday flag — same-day exit required; tighter SL/target applied
     private boolean intraday;
 
+    // MF-specific: SIP, SIP_CONTINUE, SIP_STOP, LUMP_SUM — null for stocks
+    private String mfSignalMode;
+
     // Lifecycle
     @Builder.Default
     private SignalStatus status = SignalStatus.PENDING_APPROVAL;

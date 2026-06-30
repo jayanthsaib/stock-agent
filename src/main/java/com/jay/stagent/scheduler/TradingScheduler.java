@@ -3,7 +3,9 @@ package com.jay.stagent.scheduler;
 import com.jay.stagent.config.AgentConfig;
 import com.jay.stagent.entity.TradeRecord;
 import com.jay.stagent.layer1_data.DataIngestionEngine;
+import com.jay.stagent.layer1_data.MFDataIngestionEngine;
 import com.jay.stagent.layer1_data.MarketCalendarService;
+import com.jay.stagent.layer3_signal.MFSignalGenerator;
 import com.jay.stagent.layer3_signal.SignalGenerator;
 import com.jay.stagent.layer4_risk.RiskValidator;
 import com.jay.stagent.layer6_execution.ApprovalGateway;
@@ -36,6 +38,8 @@ import java.util.List;
 public class TradingScheduler {
 
     private final DataIngestionEngine dataIngestionEngine;
+    private final MFDataIngestionEngine mfDataIngestionEngine;
+    private final MFSignalGenerator mfSignalGenerator;
     private final MarketCalendarService marketCalendar;
     private final SignalGenerator signalGenerator;
     private final RiskValidator riskValidator;
@@ -245,6 +249,57 @@ public class TradingScheduler {
             learningEngine.runMonthlyReview();
         } catch (Exception e) {
             log.error("Monthly review failed: {}", e.getMessage());
+        }
+    }
+
+    // ── Monthly MF Scan (1st of each month at 07:30 IST) ─────────────────────
+
+    @Scheduled(cron = "0 30 7 1 * *", zone = "Asia/Kolkata")
+    public void monthlyMFScan() {
+        if (!config.mutualFunds().isEnabled()) return;
+        log.info("=== MONTHLY MF SCAN (1st of month 07:30 IST) ===");
+        runMFPipeline("MONTHLY");
+    }
+
+    // ── Weekly MF Scan (every Monday at 08:00 IST) ───────────────────────────
+
+    @Scheduled(cron = "0 0 8 * * MON", zone = "Asia/Kolkata")
+    public void weeklyMFScan() {
+        if (!config.mutualFunds().isEnabled()) return;
+        log.info("=== WEEKLY MF SCAN (Monday 08:00 IST) ===");
+        runMFPipeline("WEEKLY");
+    }
+
+    private void runMFPipeline(String triggerType) {
+        try {
+            telegramService.sendMessage(String.format(
+                "📊 %s MF Scan started — fetching schemes from AMFI...", triggerType));
+            mfDataIngestionEngine.refresh();
+
+            List<TradeRecord> openPositions = tradeRepo.findByStatus("EXECUTED");
+            List<TradeSignal> signals = mfSignalGenerator.generateSignals();
+
+            if (signals.isEmpty()) {
+                telegramService.sendMessage(String.format(
+                    "📊 %s MF scan complete — no signals above threshold.", triggerType));
+                return;
+            }
+
+            int submitted = 0;
+            for (TradeSignal signal : signals) {
+                RiskValidator.ValidationResult validation =
+                    riskValidator.validate(signal, openPositions);
+                if (validation.passed()) {
+                    approvalGateway.submitForApproval(signal, validation);
+                    submitted++;
+                }
+            }
+            telegramService.sendMessage(String.format(
+                "📊 %s MF scan: %d signal(s) submitted (%d generated, %d risk-rejected).",
+                triggerType, submitted, signals.size(), signals.size() - submitted));
+        } catch (Exception e) {
+            log.error("MF {} scan failed: {}", triggerType, e.getMessage(), e);
+            telegramService.sendAlert("⚠️ MF SCAN FAILED (" + triggerType + ")", e.getMessage());
         }
     }
 }

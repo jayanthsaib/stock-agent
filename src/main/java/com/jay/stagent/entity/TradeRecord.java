@@ -25,6 +25,8 @@ public class TradeRecord {
     private String sector;
     private String signalType;    // BUY/SELL/HOLD/REDUCE
     private String status;        // PENDING_APPROVAL/APPROVED/REJECTED/EXPIRED/EXECUTED/CANCELLED
+    @Column(name = "asset_type", length = 20)
+    private String assetType;     // Stock, Mutual Fund
 
     private double entryPrice;
     private double targetPrice;
